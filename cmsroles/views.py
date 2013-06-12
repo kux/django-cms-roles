@@ -1,39 +1,58 @@
+from django.contrib.auth.decorators import user_passes_test
+from django.contrib.auth.models import User
+from django import forms
+from django.forms.formsets import formset_factory
+from django.http import HttpResponseNotAllowed
 from django.shortcuts import render_to_response
+from django.template import RequestContext
 
+from cmsroles.siteadmin import get_administered_sites, \
+    get_site_users, is_site_admin
 from cmsroles.models import Role
-from cmsroles.siteadmin import get_administered_sites, users_assigned_to_site
 
 
-def _get_site_users(site):
-    users = []
-    for role in Role.objects.all():
-        users.extend(role.users_with_role(site))
-    return users
+class UserForm(forms.Form):
+
+    def __init__(self, *args, **kwargs):
+        super(UserForm, self).__init__(*args, **kwargs)
+        self.fields['user'] = forms.ModelChoiceField(queryset=User.objects.all())
+        self.fields['role'] = forms.ModelChoiceField(queryset=Role.objects.all())
 
 
-
-# TODO: add user authentication and authorization on this view
-# TODO: check user is site admin
+@user_passes_test(is_site_admin, login_url='/admin/')
 def user_setup(request):
-    if request.METHOD == 'POST':
-        pass
+    administered_sites = get_administered_sites(request.user)
+    site_pk = request.GET.get('site')
+    if not site_pk:
+        current_site = administered_sites[0]
     else:
-        # Minimum context for rendering the admin surroundings
-        sites = get_administered_sites(request.user)
-        if sites:
-            current_site = sites[0]
-            available_users = users_assigned_to_site(current_site)
+        site_pk = int(site_pk)
+        if all(site_pk != s.pk for s in administered_sites):
+            return HttpResponseNotAllowed()
         else:
-            current_site = None
-            available_users = []
+            current_site = next((s for s in administered_sites if site_pk == s.pk),
+                                administered_sites[0])
 
-        opts = {'app_label': 'cmsroles'}
-        context = {'opts': opts,
-                   'app_label': 'Cmsroles',
-                   'user': request.user,
-                   'sites': sites,
-                   'current_site': current_site,
-                   'available_users': available_users}
+    UserFormset = formset_factory(UserForm, extra=0)
+    if request.method == 'POST':
+        user_formset = UserFormset(request.POST, request.FILES)
+        if user_formset.is_valid():
+            pass
+    else:
+        available_users = get_site_users(current_site)
+        initial_data = [
+            {'user': user, 'role': role}
+            for user, role in available_users.iteritems()]
+        user_formset = UserFormset(initial=initial_data)
 
-    # TODO: User RequestContext
-    return render_to_response('admin/cmsroles/user_setup.html', context)
+        user_formset = UserFormset(initial=initial_data)
+    opts = {'app_label': 'cmsroles'}
+    context = {'opts': opts,
+               'app_label': 'Cmsroles',
+               'administered_sites': administered_sites,
+               'current_site': current_site,
+               'user_formset': user_formset,
+               'user': request.user,
+               'available_users': available_users}
+    return render_to_response('admin/cmsroles/user_setup.html', context,
+                              context_instance=RequestContext(request))

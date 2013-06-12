@@ -28,6 +28,7 @@ class Role(AbstractPagePermission):
     # TODO: on delete also delete global page permissions and site groups
     derived_global_permissions = models.ManyToManyField(
         GlobalPagePermission, blank=True, null=True)
+    # TODO: writer role -- add support for non -global permissions role
 
     def __unicode__(self):
         return self.name
@@ -63,10 +64,10 @@ class Role(AbstractPagePermission):
         gp.sites.add(site)
         self.derived_global_permissions.add(gp)
 
-    def all_users_with_role(self):
+    def all_users(self):
         return User.objects.filter(groups__globalpagepermission__role=self)
 
-    def users_with_role(self, site):
+    def users(self, site):
         gp = self.derived_global_permissions.filter(sites=site)
         return User.objects.filter(groups__globalpagepermission=gp)
 
@@ -87,4 +88,3 @@ def create_role_groups(instance, **kwargs):
 
 
 signals.post_save.connect(create_role_groups, sender=Site)
-

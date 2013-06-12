@@ -1,5 +1,7 @@
 {% extends "admin/change_form.html" %}
 
+{% load staticfiles %}
+
 {% load i18n admin_static admin_modify %}
 {% load url from future %}
 {% load admin_urls %}
@@ -13,5 +15,30 @@
 {% endblock %}
 
 {% block content %}
-  
+  <select id="site_selector">
+    {% for site in administered_sites %}
+      <option value="{{site.pk}}"> {{site.name}} </option>
+    {% endfor %}
+  </select>
+
+  <form method="post" action="">
+    {% csrf_token %}
+    {{ user_formset.management_form }}
+    <div id="user_formset">
+      <span> ------------------------- </span>
+      {% for form in user_formset %}
+        {{ form.as_p }}
+      {% endfor %}
+    </div>
+    <input type="submit" value="Save" />
+  </form>
+  <script type="text/javascript" src="/static/admin/js/core.js"></script>
+  <script type="text/javascript" src="/static/admin/js/admin/RelatedObjectLookups.js"></script>
+  <script type="text/javascript" src="/static/admin/js/jquery.js"></script>
+  <script type="text/javascript" src="/static/admin/js/jquery.init.js"></script>
+  <script type="text/javascript" src="{% static "cmsroles/js/jquery.formset.js" %}"></script>
+
+  <script type="text/javascript">
+    django.jQuery('#user_formset').formset();
+  </script>
 {% endblock %}
