@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import signals
 from django.utils.translation import ugettext_lazy as _
+from django.utils import simplejson as json
 
 from cms.models.permissionmodels import AbstractPagePermission, GlobalPagePermission
 
@@ -70,6 +71,10 @@ class Role(AbstractPagePermission):
     def users(self, site):
         gp = self.derived_global_permissions.filter(sites=site)
         return User.objects.filter(groups__globalpagepermission=gp)
+
+    def get_site_specific_group(self, site):
+        # TODO: enforce there is one global page perm per site
+        return self.derived_global_permissions.get(sites=site).group
 
 
 def get_permission_keys():

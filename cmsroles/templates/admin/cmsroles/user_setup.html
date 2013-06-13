@@ -17,28 +17,45 @@
 {% block content %}
   <select id="site_selector">
     {% for site in administered_sites %}
-      <option value="{{site.pk}}"> {{site.name}} </option>
+      <option value="{{site.pk}}"
+              {% if site.pk == current_site.pk %}
+                selected="selected"
+              {% endif %}
+              >
+        {{site.name}}
+      </option>
     {% endfor %}
   </select>
 
-  <form method="post" action="">
+  <form id="user_formset" method="post" action="" style="
+    {% if user_formset|length == 0 %}
+       display: none;
+    {% endif %}
+    margin-top: 30px
+  ">
     {% csrf_token %}
     {{ user_formset.management_form }}
-    <div id="user_formset">
-      <span> ------------------------- </span>
+    {{ user_formset.non_form_errors }}
+    <div id="user_formset_fields">
       {% for form in user_formset %}
         {{ form.as_p }}
       {% endfor %}
     </div>
-    <input type="submit" value="Save" />
+    <input type="submit" value="Save users" />
   </form>
+
+  <form method="post" id="add_user_form" style="margin-top: 30px"/>
+    {% csrf_token %}
+    <div id="add_user_form_fields">
+      {{ new_user_form.as_p }}
+    </div>
+    <input type="hidden" name="site" value="{{current_site.pk}}"/>
+    <input type="submit" value="Add User" />
+  </form>
+
   <script type="text/javascript" src="/static/admin/js/core.js"></script>
   <script type="text/javascript" src="/static/admin/js/admin/RelatedObjectLookups.js"></script>
   <script type="text/javascript" src="/static/admin/js/jquery.js"></script>
   <script type="text/javascript" src="/static/admin/js/jquery.init.js"></script>
-  <script type="text/javascript" src="{% static "cmsroles/js/jquery.formset.js" %}"></script>
-
-  <script type="text/javascript">
-    django.jQuery('#user_formset').formset();
-  </script>
+  <script type="text/javascript" src="{% static "cmsroles/js/user_setup.js" %}"></script>
 {% endblock %}
