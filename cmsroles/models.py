@@ -29,7 +29,7 @@ class Role(AbstractPagePermission):
     # TODO: on delete also delete global page permissions and site groups
     derived_global_permissions = models.ManyToManyField(
         GlobalPagePermission, blank=True, null=True)
-    # TODO: writer role -- add support for non -global permissions role
+    # TODO: writer role -- add support for non-global permissions role
 
     def __unicode__(self):
         return self.name
@@ -45,13 +45,13 @@ class Role(AbstractPagePermission):
                             for gp in self.derived_global_permissions.all()
                             for site in gp.sites())
         for site in Site.objects.exclude(pk__in=covered_sites):
-            self.add_global_page_perm_to_role(site)
+            self.add_site_specific_global_page_perm(site)
 
     def _get_permissions_dict(self):
         return dict((key, getattr(self, key))
                     for key in get_permission_fields())
 
-    def add_global_page_perm_to_role(self, site):
+    def add_site_specific_global_page_perm(self, site):
         site_group = self.group
         permissions = self.group.permissions.all()
         site_group.pk = None
@@ -66,9 +66,11 @@ class Role(AbstractPagePermission):
         self.derived_global_permissions.add(gp)
 
     def all_users(self):
+        """Returns all users having this role."""
         return User.objects.filter(groups__globalpagepermission__role=self)
 
     def users(self, site):
+        """Returnes all users having this role in the given site."""
         gp = self.derived_global_permissions.filter(sites=site)
         return User.objects.filter(groups__globalpagepermission=gp)
 
@@ -89,7 +91,7 @@ def create_role_groups(instance, **kwargs):
     site = instance
     if kwargs['created']:
         for role in Role.objects.all():
-            role.add_global_page_perm_to_role(site)
+            role.add_site_specific_global_page_perm(site)
 
 
 signals.post_save.connect(create_role_groups, sender=Site)

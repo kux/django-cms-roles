@@ -34,9 +34,7 @@ class AddUserForm(UserCreationForm):
 class BaseUserFormSet(BaseFormSet):
 
     def clean(self):
-        """Checks that no two articles have the same title."""
         if any(self.errors):
-            # Don't bother validating the formset unless each form is valid on its own
             return
         users = set()
         for form in self.forms:
@@ -125,3 +123,14 @@ def add_user(request):
             'add_user_form': add_user_form.as_p()}
     return HttpResponse(simplejson.dumps(response_dict),
                         content_type="application/json")
+
+
+@user_passes_test(is_site_admin, login_url='/admin/')
+def delete_user(request):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed()
+    site_pk = request.POST.get('site')
+    # we don't care about the returned values. This is only for
+    # validating that the user actually has site admin rights over
+    # the site
+    current_site, _ = _get_user_sites(request.user, site_pk)

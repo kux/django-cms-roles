@@ -42,7 +42,7 @@ def get_administered_sites(user):
 
 
 def get_site_users(site):
-    """Returns a dictionary containing all users bapped to their role
+    """Returns a dictionary containing all users mapped to their role
     that belong to site.
     """
     users_to_roles = {}

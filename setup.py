@@ -11,7 +11,7 @@ setup(
     author='Ioan Alexandru Cucu',
     author_email='alexandruioan.cucu@gmail.com',
     url='https://github.com/kux/django-cms-roles',
-    install_requires = (
+    install_requires=(
         'Django>=1.3,<1.5',
         'django-cms>=2.3,<2.4'),
     packages=find_packages(),
