@@ -1,14 +1,28 @@
 from django.contrib import admin
+from django.contrib.auth.models import Group
 from django.db import models
+from django.forms import ModelForm, ModelChoiceField
 
 from cmsroles.models import Role, get_permission_fields
 
 
+class RoleForm(ModelForm):
+    group = ModelChoiceField(
+        queryset=Group.objects.filter(
+            globalpagepermission__isnull=True),
+        required=True)
+
+    class Meta:
+        model = Role
+        fields = tuple(['name', 'group'] + get_permission_fields())
+
+
 class RoleAdmin(admin.ModelAdmin):
-    # TODO: make group field mandatory
     list_display = ['name', 'group'] + get_permission_fields()
-    fields = tuple(['name', 'group'] + get_permission_fields())
-    exclude = ('derived_global_permissions',)
+    form = RoleForm
+
+    def __init__(self, *args, **kwargs):
+        super(RoleAdmin, self).__init__(*args, **kwargs)
 
     def get_actions(self, request):
         """Overriden get_actions so we don't allow bulk deletions.

@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from django.contrib.sites.models import Site
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import signals
+from django.db.models import signals, Q
 from django.utils.translation import ugettext_lazy as _
 
 from cms.models.permissionmodels import AbstractPagePermission, GlobalPagePermission
@@ -33,15 +33,19 @@ class Role(AbstractPagePermission):
         return self.name
 
     def clean(self):
-        if Role.objects.filter(group=self.group).exists():
-            raise ValidationError('A Role for this group already exists')
+        filter_clause = Q(group=self.group) | Q(derived_global_permissions__group=self.group)
+        query = Role.objects.filter(filter_clause)
+        if self.pk:
+            query = query.exclude(pk=self.pk)
+        if query.exists():
+            raise ValidationError(u'A Role for group "%s" already exists' % self.group.name)
 
     def save(self, *args, **kwargs):
         super(Role, self).save(*args, **kwargs)
         # TODO: improve performance by having less queries
         covered_sites = set(site.pk
                             for gp in self.derived_global_permissions.all()
-                            for site in gp.sites())
+                            for site in gp.sites.all())
         for site in Site.objects.exclude(pk__in=covered_sites):
             self.add_site_specific_global_page_perm(site)
 
