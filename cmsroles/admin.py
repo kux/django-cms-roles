@@ -10,6 +10,15 @@ class RoleAdmin(admin.ModelAdmin):
     fields = tuple(['name', 'group'] + get_permission_fields())
     exclude = ('derived_global_permissions',)
 
+    def get_actions(self, request):
+        """Overriden get_actions so we don't allow bulk deletions.
+        Bulk deletions would leave orphaned auto-generated groups.
+        """
+        actions = super(RoleAdmin, self).get_actions(request)
+        if 'delete_selected' in actions:
+            del actions['delete_selected']
+        return actions
+
 
 class UserSetup(models.Model):
     """Dummy model without any associated db table.

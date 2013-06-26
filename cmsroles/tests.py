@@ -1,10 +1,3 @@
-"""
-This file demonstrates writing tests using the unittest module. These will pass
-when you run "manage.py test".
-
-Replace this with more appropriate tests for your application.
-"""
-
 from django.test import TestCase
 from django.contrib.auth.models import User, Group, Permission
 from django.contrib.sites.models import Site
@@ -86,3 +79,14 @@ class BasicSiteSetupTest(TestCase):
         bar_site = Site.objects.get(name='bar.site.com')
         bar_editors = editor_role.users(bar_site)
         self.assertSetEqual(set(u.username for u in bar_editors), set(['criss', 'vasile']))
+
+    def test_role_deletion(self):
+        self._create_simple_setup()
+        group_count = Group.objects.count()
+        site_count = Site.objects.count()
+        developer_role = Role.objects.get(name='developer')
+        developer_role.delete()
+        after_deletion_group_count = Group.objects.count()
+        # check that the groups that were implicitly
+        # created for each site also got deleted
+        self.assertEqual(after_deletion_group_count, group_count - site_count)

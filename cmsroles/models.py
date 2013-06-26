@@ -4,7 +4,6 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import signals
 from django.utils.translation import ugettext_lazy as _
-from django.utils import simplejson as json
 
 from cms.models.permissionmodels import AbstractPagePermission, GlobalPagePermission
 
@@ -26,7 +25,6 @@ class Role(AbstractPagePermission):
         verbose_name_plural = _('roles')
 
     name = models.CharField(max_length=50, unique=True)
-    # TODO: on delete also delete global page permissions and site groups
     derived_global_permissions = models.ManyToManyField(
         GlobalPagePermission, blank=True, null=True)
     # TODO: writer role -- add support for non-global permissions role
@@ -46,6 +44,12 @@ class Role(AbstractPagePermission):
                             for site in gp.sites())
         for site in Site.objects.exclude(pk__in=covered_sites):
             self.add_site_specific_global_page_perm(site)
+
+    def delete(self, *args, **kwargs):
+        for global_perm in self.derived_global_permissions.all():
+            # global_perm will also get deleted by cascading from global_perm.group
+            global_perm.group.delete()
+        return super(Role, self).delete(*args, **kwargs)
 
     def _get_permissions_dict(self):
         return dict((key, getattr(self, key))
