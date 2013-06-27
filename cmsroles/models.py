@@ -63,8 +63,7 @@ class Role(AbstractPagePermission):
         site_group = self.group
         permissions = self.group.permissions.all()
         site_group.pk = None
-        # TODO: check name is valid. site names are not unique!!
-        site_group.name = '%s-%s' % (site.domain, site_group.name)
+        site_group.name = '%s-%d-%s' % (site.domain, site.pk, site_group.name)
         site_group.save()
         site_group.permissions = permissions
         kwargs = self._get_permissions_dict()
