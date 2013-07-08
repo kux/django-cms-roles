@@ -90,3 +90,15 @@ class BasicSiteSetupTest(TestCase):
         # check that the groups that were implicitly
         # created for each site also got deleted
         self.assertEqual(after_deletion_group_count, group_count - site_count)
+
+    def test_generated_group_names(self):
+        foo_site = Site.objects.create(name='foo.site.com', domain='foo.site.com')
+        bar_site = Site.objects.create(name='bar.site.com', domain='bar.site.com')
+        base_site_admin_group = self._create_site_adimin_group()
+        admin_role = Role.objects.create(name='site admin', group=base_site_admin_group)
+        generated_group = admin_role.get_site_specific_group(foo_site)
+        self.assertEqual(generated_group.name, '%s-%d-%s' % (
+                foo_site.domain, foo_site.pk, base_site_admin_group.name))
+        generated_group = admin_role.get_site_specific_group(bar_site)
+        self.assertEqual(generated_group.name, '%s-%d-%s' % (
+                bar_site.domain, bar_site.pk, base_site_admin_group.name))

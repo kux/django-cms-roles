@@ -1,4 +1,4 @@
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, Group
 from django.contrib.sites.models import Site
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -60,7 +60,7 @@ class Role(AbstractPagePermission):
                     for key in get_permission_fields())
 
     def add_site_specific_global_page_perm(self, site):
-        site_group = self.group
+        site_group = Group.objects.get(pk=self.group.pk)
         permissions = self.group.permissions.all()
         site_group.pk = None
         site_group.name = '%s-%d-%s' % (site.domain, site.pk, site_group.name)
