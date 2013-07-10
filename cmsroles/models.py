@@ -83,15 +83,10 @@ class Role(AbstractPagePermission):
 
     def get_site_specific_group(self, site):
         # TODO: enforce there is one global page perm per site
+        #       the derived global page permissions should always have
+        #       a single site, but there's nothing stopping super-users
+        #       from messing around with them
         return self.derived_global_permissions.get(sites=site).group
-
-
-def get_permission_keys():
-    permission_keys = []
-    for field in AbstractPagePermission._meta.fields:
-        if isinstance(field, models.BooleanField) and field.name.startswith('can_'):
-            permission_keys.append(field.name)
-    return permission_keys
 
 
 def create_role_groups(instance, **kwargs):
