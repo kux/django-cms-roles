@@ -5,7 +5,8 @@ from django.core.exceptions import ValidationError
 
 from cms.models.permissionmodels import GlobalPagePermission
 
-from cmsroles.models import Role 
+from cmsroles.models import Role
+from cmsroles.siteadmin import is_site_admin, get_administered_sites
 
 
 class BasicSiteSetupTest(TestCase):
@@ -29,20 +30,36 @@ class BasicSiteSetupTest(TestCase):
         editor_role = Role.objects.create(name='editor', group=base_editor_group)
         base_developer_group = Group.objects.create(name='developer')
         developer_role = Role.objects.create(name='developer', group=base_developer_group)
-        joe = User.objects.create(username='joe')
+        joe = User.objects.create(username='joe', is_staff=True)
         joe.groups.add(admin_role.get_site_specific_group(foo_site))
         joe.groups.add(admin_role.get_site_specific_group(bar_site))
-        george = User.objects.create(username='george')
+        george = User.objects.create(username='george', is_staff=True)
         george.groups.add(developer_role.get_site_specific_group(foo_site))
-        robin = User.objects.create(username='robin')
+        robin = User.objects.create(username='robin', is_staff=True)
         robin.groups.add(editor_role.get_site_specific_group(foo_site))
         robin.groups.add(developer_role.get_site_specific_group(bar_site))
-        jack = User.objects.create(username='jack')
+        jack = User.objects.create(username='jack', is_staff=True)
         jack.groups.add(admin_role.get_site_specific_group(bar_site))
-        criss = User.objects.create(username='criss')
+        criss = User.objects.create(username='criss', is_staff=True)
         criss.groups.add(editor_role.get_site_specific_group(bar_site))
-        vasile = User.objects.create(username='vasile')
+        vasile = User.objects.create(username='vasile', is_staff=True)
         vasile.groups.add(editor_role.get_site_specific_group(bar_site))
+
+    def test_is_admin(self):
+        self._create_simple_setup()
+        joe = User.objects.get(username='joe')
+        self.assertTrue(is_site_admin(joe))
+
+    def test_get_administered_sites(self):
+        self._create_simple_setup()
+        joe = User.objects.get(username='joe')
+        administered_sites = get_administered_sites(joe)
+        self.assertEquals(set([s.domain for s in administered_sites]),
+                          set(['foo.site.com', 'bar.site.com']))
+        jack = User.objects.get(username='jack')
+        administered_sites = get_administered_sites(jack)
+        self.assertEquals([s.domain for s in administered_sites],
+                          ['bar.site.com'])
 
     def test_global_page_permission_implicitly_created(self):
         site_admin_group = self._create_site_adimin_group()

@@ -1,7 +1,6 @@
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm
-from django.contrib.sites.models import Site
 from django.core.exceptions import PermissionDenied
 from django.core.urlresolvers import reverse
 from django import forms
