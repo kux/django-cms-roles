@@ -4,6 +4,7 @@ from django.db import models
 from django.forms import ModelForm, ModelChoiceField
 
 from cmsroles.models import Role, get_permission_fields
+from cmsroles.siteadmin import is_site_admin
 
 
 class RoleForm(ModelForm):
@@ -41,7 +42,16 @@ class UserSetup(models.Model):
     """
     class Meta:
         verbose_name_plural = 'User Setup'
+        permissions = ()
 
+
+class UserSetupAdmin(admin.ModelAdmin):
+
+    class Meta:
+        model = UserSetup
+
+    def has_change_permission(self, request, obj=None):
+        return is_site_admin(request.user)
 
 admin.site.register(Role, RoleAdmin)
-admin.site.register(UserSetup)
+admin.site.register(UserSetup, UserSetupAdmin)
