@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 from setuptools import setup, find_packages
+from setuptools.command.test import test as TestCommand
 
 
 setup(
@@ -14,6 +15,11 @@ setup(
     install_requires=(
         'Django>=1.3,<1.5',
         'django-cms>=2.3,<2.4'),
+    tests_require=[
+        'django-nose',
+        'mock==1.0.1',
+    ],
+    test_suite='runtests.runtests',
     packages=find_packages(),
     include_package_data=True,
 )
