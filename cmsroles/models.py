@@ -43,11 +43,17 @@ class Role(AbstractPagePermission):
     def save(self, *args, **kwargs):
         super(Role, self).save(*args, **kwargs)
         # TODO: improve performance by having less queries
+        derived_global_permissions = self.derived_global_permissions.all()
         covered_sites = set(site.pk
-                            for gp in self.derived_global_permissions.all()
+                            for gp in derived_global_permissions
                             for site in gp.sites.all())
         for site in Site.objects.exclude(pk__in=covered_sites):
             self.add_site_specific_global_page_perm(site)
+        for gp in derived_global_permissions:
+            permissions = self._get_permissions_dict()
+            for key, value in permissions.iteritems():
+                setattr(gp, key, value)
+            gp.save()
 
     def delete(self, *args, **kwargs):
         for global_perm in self.derived_global_permissions.all():

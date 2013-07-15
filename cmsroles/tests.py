@@ -149,3 +149,14 @@ class BasicSiteSetupTest(TestCase):
         generated_group = admin_role.get_site_specific_group(bar_site)
         self.assertEqual(generated_group.name, '%s-%d-%s' % (
                 bar_site.domain, bar_site.pk, base_site_admin_group.name))
+
+    def test_changes_in_role_reflected_in_global_perms(self):
+        self._create_simple_setup()
+        developer_role = Role.objects.get(name='developer')
+        can_add = developer_role.can_add
+        for gp in developer_role.derived_global_permissions.all():
+            self.assertEqual(gp.can_add, developer_role.can_add)
+        developer_role.can_add = not can_add
+        developer_role.save()
+        for gp in developer_role.derived_global_permissions.all():
+            self.assertEqual(gp.can_add, developer_role.can_add)
