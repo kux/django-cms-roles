@@ -46,17 +46,19 @@ class BaseUserFormSet(BaseFormSet):
 
 def _get_user_sites(user, site_pk):
     administered_sites = get_administered_sites(user)
+    if not administered_sites:
+        raise PermissionDenied()
+
     if not site_pk:
         return (administered_sites[0], administered_sites)
+
+    site_pk = int(site_pk)
+    if all(site_pk != s.pk for s in administered_sites):
+        raise PermissionDenied()
     else:
-        site_pk = int(site_pk)
-        if all(site_pk != s.pk for s in administered_sites):
-            # TODO: does this get converted to a http response forbidden?
-            raise PermissionDenied()
-        else:
-            return (next((s for s in administered_sites if site_pk == s.pk),
-                         administered_sites[0]),
-                    administered_sites)
+        return (next((s for s in administered_sites if site_pk == s.pk),
+                     administered_sites[0]),
+                administered_sites)
 
 
 @user_passes_test(is_site_admin, login_url='/admin/')

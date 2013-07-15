@@ -1,4 +1,4 @@
-SITE_ID = None
+SITE_ID = 1
 INSTALLED_APPS = [
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -50,11 +50,7 @@ MIDDLEWARE_CLASSES = (
     'django.middleware.cache.UpdateCacheMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'cms_templates.middleware.SiteIDPatchMiddleware',
-    'cms_templates.middleware.DBTemplatesMiddleware',
-
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
 )
@@ -62,6 +58,5 @@ TEMPLATE_LOADERS = (
     'django.template.loaders.filesystem.Loader',
     'django.template.loaders.app_directories.Loader',
     'django.template.loaders.eggs.Loader',
-    'cms_templates.loader.CmsTemplatesLoader',
     )
 CACHE_BACKEND = 'locmem:///'

@@ -1,7 +1,9 @@
 from django.test import TestCase
+from django.test.client import Client
 from django.contrib.auth.models import User, Group, Permission
 from django.contrib.sites.models import Site
 from django.core.exceptions import ValidationError
+
 
 from cms.models.permissionmodels import GlobalPagePermission
 
@@ -10,6 +12,11 @@ from cmsroles.siteadmin import is_site_admin, get_administered_sites
 
 
 class BasicSiteSetupTest(TestCase):
+
+    def setUp(self):
+        User.objects.create_superuser(
+            username='root', password='root',
+            email='root@roto.com')
 
     def _create_site_adimin_group(self):
         site_admin_group = Group.objects.create(name='site_admin')
@@ -60,6 +67,29 @@ class BasicSiteSetupTest(TestCase):
         administered_sites = get_administered_sites(jack)
         self.assertEquals([s.domain for s in administered_sites],
                           ['bar.site.com'])
+
+    def test_not_accessible_for_non_siteadmins(self):
+        joe = User.objects.create_user(
+            username='joe', password='x', email='joe@mata.com')
+        joe.is_staff = True
+        joe.save()
+        self.client.login(username='joe', password='x')
+        response = self.client.get('/admin/cmsroles/usersetup/')
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(any('/admin/?next=/admin/cmsroles/usersetup/' in value
+                            for header, value in response.items()))
+
+    def test_403_for_siteadmins_with_no_site(self):
+        joe = User.objects.create_user(
+            username='joe', password='x', email='joe@mata.com')
+        joe.is_staff = True
+        site_admin_perms = Permission.objects.filter(content_type__model='user')
+        for perm in site_admin_perms:
+            joe.user_permissions.add(perm)
+        joe.save()
+        self.client.login(username='joe', password='x')
+        response = self.client.get('/admin/cmsroles/usersetup/')
+        self.assertEqual(response.status_code, 403)
 
     def test_global_page_permission_implicitly_created(self):
         site_admin_group = self._create_site_adimin_group()
