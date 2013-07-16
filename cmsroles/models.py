@@ -102,4 +102,20 @@ def create_role_groups(instance, **kwargs):
             role.add_site_specific_global_page_perm(site)
 
 
+def update_site_specific_groups(instance, **kwargs):
+    group = instance
+    try:
+        role = Role.objects.get(group=group)
+    except Role.DoesNotExist:
+        return
+    else:
+        derived_global_permissions = role.derived_global_permissions.all()\
+            .prefetch_related('group')
+        derived_groups = [gp.group for gp in derived_global_permissions]
+        permissions = group.permissions.all()
+        for derived_group in derived_groups:
+            derived_group.permissions = permissions
+
+
 signals.post_save.connect(create_role_groups, sender=Site)
+signals.m2m_changed.connect(update_site_specific_groups, sender=Group.permissions.through)

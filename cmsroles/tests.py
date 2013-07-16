@@ -160,3 +160,29 @@ class BasicSiteSetupTest(TestCase):
         developer_role.save()
         for gp in developer_role.derived_global_permissions.all():
             self.assertEqual(gp.can_add, developer_role.can_add)
+
+    def test_changes_in_base_group_reflected_in_generated_ones(self):
+
+        def check_permissions(role, permission_set):
+            for gp in role.derived_global_permissions.all():
+                self.assertSetEqual(
+                    set([perm.pk for perm in gp.group.permissions.all()]),
+                    permission_set)
+
+        self._create_simple_setup()
+        site_admin_base_group = Group.objects.get(name='site_admin')
+        perms = site_admin_base_group.permissions.all()
+        self.assertTrue(len(perms) > 0)
+        admin_role = Role.objects.get(name='site admin')
+        check_permissions(admin_role, set(p.pk for p in perms))
+        # remove all permissions
+        site_admin_base_group.permissions = []
+        site_admin_base_group = Group.objects.get(pk=site_admin_base_group.pk)
+        self.assertEqual(list(site_admin_base_group.permissions.all()), [])
+        admin_role = Role.objects.get(pk=admin_role.pk)
+        check_permissions(admin_role, set())
+        #and set them back again
+        site_admin_base_group.permissions = perms
+        self.assertTrue(len(perms) > 0)
+        admin_role = Role.objects.get(name='site admin')
+        check_permissions(admin_role, set(p.pk for p in perms))
