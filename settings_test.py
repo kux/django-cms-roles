@@ -60,3 +60,5 @@ TEMPLATE_LOADERS = (
     'django.template.loaders.eggs.Loader',
     )
 CACHE_BACKEND = 'locmem:///'
+
+SOUTH_TESTS_MIGRATE = False
