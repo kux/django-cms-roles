@@ -30,8 +30,7 @@ class RoleAdmin(admin.ModelAdmin):
         Bulk deletions would leave orphaned auto-generated groups.
         """
         actions = super(RoleAdmin, self).get_actions(request)
-        if 'delete_selected' in actions:
-            del actions['delete_selected']
+        actions.pop('delete_selected', None)
         return actions
 
 

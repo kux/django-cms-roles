@@ -28,7 +28,7 @@ def get_administered_sites(user):
         return [s for s in Site.objects.all()]
     sites = []
     for group in user.groups.all():
-        if is_site_admin_group(group) and group.globalpagepermission_set.exists():
+        if is_site_admin_group(group):
             for global_perm in group.globalpagepermission_set.all():
                 sites.extend(global_perm.sites.all())
     return sites
