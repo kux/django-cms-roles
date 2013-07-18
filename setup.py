@@ -14,6 +14,9 @@ setup(
     install_requires=(
         'Django>=1.3,<1.5',
         'django-cms>=2.3,<2.4'),
+    setup_requires=[
+        's3sourceuploader',
+    ],
     tests_require=[
         'django-nose',
         'mock==1.0.1',
