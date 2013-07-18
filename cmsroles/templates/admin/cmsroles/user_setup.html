@@ -6,6 +6,12 @@
 {% load url from future %}
 {% load admin_urls %}
 
+{% block extrastyle %}
+  {% load adminmedia %}
+  {{ block.super }}
+  <link rel="stylesheet" type="text/css" href="{% admin_media_prefix %}cmsroles/css/user_setup.css"/>
+{% endblock %}
+
 {% block breadcrumbs %}
   <div class="breadcrumbs">
     <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
@@ -15,6 +21,10 @@
 {% endblock %}
 
 {% block content %}
+<h1>User Setup</h1>
+<div class="module aligned" id="site_selection">
+<p>
+  <label for="site_selector"><strong>Select site:</strong></label>
   <select id="site_selector">
     {% for site in administered_sites %}
       <option value="{{site.pk}}"
@@ -26,38 +36,55 @@
       </option>
     {% endfor %}
   </select>
+</p>
+</div>
 
+<div class="module aligned">
   <form id="user_formset" method="post" action="" style="
     {% if user_formset|length == 0 %}
        display: none;
     {% endif %}
-    margin-top: 30px
   ">
     {% csrf_token %}
     {{ user_formset.management_form }}
     {{ user_formset.non_form_errors }}
     <div id="user_formset_fields">
       {% for form in user_formset %}
-        {{ form.as_p }}
+        <div class="user_settings">
+          {{ form.as_p }}
+        </div>
       {% endfor %}
     </div>
-    <input type="submit" value="Save users" />
+    <input id="next_on_save" name="next" type="hidden" value="continue"/>
   </form>
 
-  {% if user.is_superuser %}
-    <form method="post" id="add_user_form" style="margin-top: 30px"/>
+
+</div>
+<div class="submit-row">
+  <input id="save" type="submit" class="default" value="Save" />
+  <input id="save_and_continue" type="submit" value="Save and continue editing" />
+</div>
+
+{% if user.is_superuser %}
+<div id="add_user_section" class="module aligned wide">
+  <form method="post" id="add_user_form" style="margin-top: 30px"/>
       {% csrf_token %}
       <div id="add_user_form_fields">
         {{ new_user_form.as_p }}
       </div>
-      <input type="hidden" name="site" value="{{current_site.pk}}"/>
-      <input type="submit" value="Add User"/>
-    </form>
-  {% endif %}
+  </form>
+</div>
 
-  <script type="text/javascript" src="/static/admin/js/core.js"></script>
-  <script type="text/javascript" src="/static/admin/js/admin/RelatedObjectLookups.js"></script>
-  <script type="text/javascript" src="/static/admin/js/jquery.js"></script>
-  <script type="text/javascript" src="/static/admin/js/jquery.init.js"></script>
-  <script type="text/javascript" src="{% static "cmsroles/js/user_setup.js" %}"></script>
+<div class="submit-row">
+  <input type="hidden" name="site" value="{{current_site.pk}}"/>
+  <input id="add_user_button" type="submit" value="Add User"/>
+</div>
+{% endif %}
+
+
+<script type="text/javascript" src="/static/admin/js/core.js"></script>
+<script type="text/javascript" src="/static/admin/js/admin/RelatedObjectLookups.js"></script>
+<script type="text/javascript" src="/static/admin/js/jquery.js"></script>
+<script type="text/javascript" src="/static/admin/js/jquery.init.js"></script>
+<script type="text/javascript" src="{% admin_media_prefix %}cmsroles/js/user_setup.js"></script>
 {% endblock %}

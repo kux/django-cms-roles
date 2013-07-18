@@ -77,7 +77,11 @@ def user_setup(request):
                 #       non-role generated groups?
                 user.groups.clear()
                 user.groups.add(role.get_site_specific_group(current_site))
-            return HttpResponseRedirect(reverse(user_setup))
+            next_action = request.POST['next']
+            if next_action == u'continue':
+                return HttpResponseRedirect(reverse(user_setup))
+            else:
+                return HttpResponseRedirect('/admin/')
     else:
         available_users = get_site_users(current_site)
         initial_data = [

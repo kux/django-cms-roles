@@ -1,0 +1,42 @@
+#site_selection{
+    margin-top: 20px;
+}
+
+#site_selection p{
+    padding-top: 6px;
+}
+
+.user_settings {
+    padding-top: 3px;
+    border-bottom: 1px solid #ccc;
+}
+
+#content select{
+    width: 280px;
+}
+
+#add_user_section{
+    margin-top: 30px;
+}
+
+#add_user_form{
+    margin-top: 10px !important;
+}
+
+#add_user_form p:not(:last-child){
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+}
+
+#add_user_form span{
+    display: block;
+    padding-left: 38px;
+    margin-left: 15em;
+    font-size: 10px;
+    color: #999;
+}
+
+#add_user_form label{
+    font-weight: bold !important;
+    color: #333;
+}
