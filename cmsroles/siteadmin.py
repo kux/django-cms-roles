@@ -29,7 +29,8 @@ def get_administered_sites(user):
     sites = []
     for group in user.groups.all():
         if is_site_admin_group(group):
-            for global_perm in group.globalpagepermission_set.all():
+            for global_perm in group.globalpagepermission_set.\
+                    prefetch_related('sites').all():
                 sites.extend(global_perm.sites.all())
     return sites
 
