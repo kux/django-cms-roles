@@ -50,9 +50,7 @@
     {{ user_formset.non_form_errors }}
     <div id="user_formset_fields">
       {% for form in user_formset %}
-        <div class="user_settings">
-          {{ form.as_p }}
-        </div>
+        {% include "admin/cmsroles/user_form.html" %}
       {% endfor %}
     </div>
     <input id="next_on_save" name="next" type="hidden" value="continue"/>
@@ -69,6 +67,11 @@
 <div id="add_user_section" class="module aligned wide">
   <form method="post" id="add_user_form" style="margin-top: 30px"/>
       {% csrf_token %}
+      {% comment %}
+        <!-- the value will be dynamically set through js on form submit time -->
+        <!-- for now... set it to 0 -->
+      {% endcomment %}
+      <input id="add_user_form_count" name="form_count" type="hidden" value="0"/>
       <div id="add_user_form_fields">
         {{ new_user_form.as_p }}
       </div>
