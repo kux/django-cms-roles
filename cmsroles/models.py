@@ -67,7 +67,7 @@ class Role(AbstractPagePermission):
         site_group = Group.objects.get(pk=self.group.pk)
         permissions = self.group.permissions.all()
         site_group.pk = None
-        site_group.name = '%s-%d-%s' % (site.domain, site.pk, site_group.name)
+        site_group.name = 'cmsroles-generated-%d-%d' % (site.pk, self.group.pk)
         site_group.save()
         site_group.permissions = permissions
         kwargs = self._get_permissions_dict()
