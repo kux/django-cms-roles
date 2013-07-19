@@ -144,11 +144,11 @@ class BasicSiteSetupTest(TestCase):
         base_site_admin_group = self._create_site_adimin_group()
         admin_role = Role.objects.create(name='site admin', group=base_site_admin_group)
         generated_group = admin_role.get_site_specific_group(foo_site)
-        self.assertEqual(generated_group.name, '%s-%d-%s' % (
-                foo_site.domain, foo_site.pk, base_site_admin_group.name))
+        self.assertEqual(generated_group.name, 'cmsroles-generated-%d-%d' % (
+                foo_site.pk, base_site_admin_group.pk))
         generated_group = admin_role.get_site_specific_group(bar_site)
-        self.assertEqual(generated_group.name, '%s-%d-%s' % (
-                bar_site.domain, bar_site.pk, base_site_admin_group.name))
+        self.assertEqual(generated_group.name, 'cmsroles-generated-%d-%d' % (
+                bar_site.pk, base_site_admin_group.pk))
 
     def test_changes_in_role_reflected_in_global_perms(self):
         self._create_simple_setup()

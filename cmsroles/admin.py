@@ -49,6 +49,9 @@ class UserSetupAdmin(admin.ModelAdmin):
     class Meta:
         model = UserSetup
 
+    def has_add_permission(self, request, obj=None):
+        return False
+
     def has_change_permission(self, request, obj=None):
         return is_site_admin(request.user)
 
