@@ -186,3 +186,22 @@ class BasicSiteSetupTest(TestCase):
         self.assertTrue(len(perms) > 0)
         admin_role = Role.objects.get(name='site admin')
         check_permissions(admin_role, set(p.pk for p in perms))
+
+    def test_role_validation_two_roles_same_group(self):
+        Site.objects.create(name='foo.site.com', domain='foo.site.com')
+        base_site_admin_group = self._create_site_adimin_group()
+        Role.objects.create(name='site admin 1', group=base_site_admin_group)
+        role_from_same_group = Role(name='site admin 2', group=base_site_admin_group)
+        with self.assertRaises(ValidationError):
+            role_from_same_group.clean()
+
+    def test_role_validation_role_from_derived_group(self):
+        Site.objects.create(name='foo.site.com', domain='foo.site.com')
+        base_site_admin_group = self._create_site_adimin_group()
+        role = Role.objects.create(name='site admin 1', group=base_site_admin_group)
+        # there should be at least one derived group for
+        # the foo.site.com created above
+        derived_group = role.derived_global_permissions.all()[0].group
+        role_from_derived_group = Role(name='site admin 2', group=derived_group)
+        with self.assertRaises(ValidationError):
+            role_from_derived_group.clean()
