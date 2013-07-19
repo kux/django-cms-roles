@@ -75,11 +75,11 @@
       <div id="add_user_form_fields">
         {{ new_user_form.as_p }}
       </div>
+      <input type="hidden" name="site" value="{{current_site.pk}}"/>
   </form>
 </div>
 
 <div class="submit-row">
-  <input type="hidden" name="site" value="{{current_site.pk}}"/>
   <input id="add_user_button" type="submit" value="Add User"/>
 </div>
 {% endif %}
