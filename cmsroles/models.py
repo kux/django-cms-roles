@@ -100,6 +100,25 @@ def create_role_groups(instance, **kwargs):
             role.add_site_specific_global_page_perm(site)
 
 
+def set_role_groups_to_delete(instance, **kwargs):
+    instance.roles_group_to_delete = []
+    for role in Role.objects.all():
+        try:
+            role_site_group = role.get_site_specific_group(instance)
+        except GlobalPagePermission.DoesNotExist:
+            # this might happen if site specific global page
+            #   permission got deleted
+            pass
+        else:
+            if role_site_group:
+                instance.roles_group_to_delete.append(role_site_group)
+
+
+def delete_role_groups(instance, **kwargs):
+    for site_group in getattr(instance, 'roles_group_to_delete', []):
+        site_group.delete()
+
+
 def update_site_specific_groups(instance, **kwargs):
     group = instance
     try:
@@ -116,4 +135,8 @@ def update_site_specific_groups(instance, **kwargs):
 
 
 signals.post_save.connect(create_role_groups, sender=Site)
+
+signals.pre_delete.connect(set_role_groups_to_delete, sender=Site)
+signals.post_delete.connect(delete_role_groups, sender=Site)
+
 signals.m2m_changed.connect(update_site_specific_groups, sender=Group.permissions.through)
