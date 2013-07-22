@@ -101,7 +101,7 @@ def create_role_groups(instance, **kwargs):
 
 
 def set_role_groups_to_delete(instance, **kwargs):
-    instance.roles_group_to_delete = []
+    instance._role_groups = []
     for role in Role.objects.all():
         try:
             role_site_group = role.get_site_specific_group(instance)
@@ -111,11 +111,11 @@ def set_role_groups_to_delete(instance, **kwargs):
             pass
         else:
             if role_site_group:
-                instance.roles_group_to_delete.append(role_site_group)
+                instance._role_groups.append(role_site_group)
 
 
 def delete_role_groups(instance, **kwargs):
-    for site_group in getattr(instance, 'roles_group_to_delete', []):
+    for site_group in getattr(instance, '_role_groups', []):
         site_group.delete()
 
 

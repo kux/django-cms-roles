@@ -138,32 +138,36 @@ class BasicSiteSetupTest(TestCase):
         # created for each site also got deleted
         self.assertEqual(after_deletion_group_count, group_count - site_count)
 
-    def test_site_group_deletion_on_site_delete(self):
-        # site delete must work even if there are no roles
-        Site.objects.create(name='foo.site.com', domain='foo.site.com').delete()
-
+    def _setup_site_deletion(self, site_name):
+        site = Site.objects.create(name=site_name, domain=site_name)
         base_site_admin_group = self._create_site_adimin_group()
-        admin_role = Role.objects.create(name='site admin', group=base_site_admin_group)
+        admin_role = Role.objects.create(
+            name='site admin', group=base_site_admin_group)
+        return site, admin_role
 
-        foo_site = Site.objects.create(name='foo.site.com', domain='foo.site.com')
-        generated_group = admin_role.get_site_specific_group(foo_site)
+    def test_site_deletion_no_roles(self):
+        # site delete must work even if there are no roles
+        Site.objects.create(
+            name='foo.site.com', domain='foo.site.com').delete()
+
+    def test_site_deletion_with_roles(self):
+        foo_site, role  = self._setup_site_deletion('foo.site.com')
+        generated_group = role.get_site_specific_group(foo_site)
         foo_site.delete()
         with self.assertRaises(GlobalPagePermission.DoesNotExist):
-            admin_role.get_site_specific_group(foo_site)
+            role.get_site_specific_group(foo_site)
         with self.assertRaises(Group.DoesNotExist):
             Group.objects.get(id=generated_group.id)
-        # site delete should work even if site generated group gets manually
-        #   deleted
-        bar_site = Site.objects.create(name='bar.site.com', domain='bar.site.com')
-        admin_role.get_site_specific_group(bar_site).delete()
-        bar_site.delete()
-        # site delete should work even if site's global change permission
-        #   has the site specific group to None
-        baz_site = Site.objects.create(name='baz.site.com', domain='baz.site.com')
-        admin_role.derived_global_permissions.filter(
-            sites=baz_site).update(group=None)
-        Site.objects.get(id=baz_site.id).delete()
 
+    def test_site_deletion_with_deleted_site_specific_group(self):
+        foo_site, role  = self._setup_site_deletion('foo.site.com')
+        role.get_site_specific_group(foo_site).delete()
+        foo_site.delete()
+
+    def test_site_deletion_with_deleted_site_specific_permission(self):
+        foo_site, role  = self._setup_site_deletion('foo.site.com')
+        role.derived_global_permissions.filter(sites=foo_site).update(group=None)
+        Site.objects.get(id=foo_site.id).delete()
 
     def test_generated_group_names(self):
         foo_site = Site.objects.create(name='foo.site.com', domain='foo.site.com')
