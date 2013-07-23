@@ -1,5 +1,6 @@
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.models import User
+from django.contrib.sites.models import Site
 from django.core.exceptions import PermissionDenied
 from django.core.urlresolvers import reverse
 from django import forms
@@ -55,9 +56,27 @@ def _get_user_sites(user, site_pk):
                 administered_sites)
 
 
+def _get_site_pk(request):
+    """Get's the current site's pk by first checking for a
+    GET request parameter. If that's unavailable it uses
+    the current request's Host header
+    """
+    site_pk = request.GET.get('site', None)
+    if site_pk is not None:
+        return site_pk
+
+    host = request.META.get('HTTP_HOST', None)
+    if host is not None:
+        try:
+            site_pk = Site.objects.get(domain=host).pk
+        except Site.DoesNotExist:
+            pass
+    return site_pk
+
+
 @user_passes_test(is_site_admin, login_url='/admin/')
 def user_setup(request):
-    site_pk = request.GET.get('site', None)
+    site_pk = _get_site_pk(request)
     current_site, administered_sites = _get_user_sites(request.user, site_pk)
     UserFormSet = formset_factory(UserForm, formset=BaseUserFormSet, extra=1)
 
