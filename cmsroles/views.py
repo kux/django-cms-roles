@@ -91,7 +91,11 @@ def user_setup(request):
 
             next_action = request.POST['next']
             if next_action == u'continue':
-                return HttpResponseRedirect(reverse(user_setup))
+                if site_pk is not None:
+                    next_url = '%s?site=%s' % (reverse(user_setup), site_pk)
+                else:
+                    next_url = reverse(user_setup)
+                return HttpResponseRedirect(next_url)
             else:
                 return HttpResponseRedirect('/admin/')
     else:
