@@ -5,10 +5,9 @@ from django.core.exceptions import PermissionDenied
 from django.core.urlresolvers import reverse
 from django import forms
 from django.forms.formsets import formset_factory, BaseFormSet
-from django.http import HttpResponseNotAllowed, HttpResponse, HttpResponseRedirect
+from django.http import HttpResponseNotAllowed, HttpResponseRedirect
 from django.shortcuts import render_to_response
-from django.utils import simplejson
-from django.template import RequestContext, loader, Context
+from django.template import RequestContext
 
 from cmsroles.siteadmin import get_administered_sites, \
     get_site_users, is_site_admin
@@ -66,7 +65,7 @@ def user_setup(request):
     site_pk = request.GET.get('site')
     current_site, administered_sites = _get_user_sites(request.user, site_pk)
     new_user_form = AddUserForm()
-    UserFormSet = formset_factory(UserForm, formset=BaseUserFormSet, extra=0)
+    UserFormSet = formset_factory(UserForm, formset=BaseUserFormSet, extra=1)
     if request.method == 'POST':
         user_formset = UserFormSet(request.POST, request.FILES)
         if user_formset.is_valid():
@@ -98,52 +97,3 @@ def user_setup(request):
                'new_user_form': new_user_form}
     return render_to_response('admin/cmsroles/user_setup.html', context,
                               context_instance=RequestContext(request))
-
-
-@user_passes_test(is_site_admin, login_url='/admin/')
-def add_user(request):
-    if request.method != 'POST':
-        return HttpResponseNotAllowed()
-    site_pk = request.POST.get('site')
-    current_site, _ = _get_user_sites(request.user, site_pk)
-    add_user_form = AddUserForm(request.POST)
-    if add_user_form.is_valid():
-        user = add_user_form.instance
-        user.is_staff = True
-        add_user_form.save()
-        role = add_user_form.cleaned_data['role']
-        user.groups.add(role.get_site_specific_group(current_site))
-
-        form_count = int(request.POST.get('form_count'))
-        UserFormSet = formset_factory(UserForm, formset=BaseUserFormSet, extra=0)
-        user_formset = UserFormSet()
-        # calling a protected method is ugly but it's still much better
-        # than setting formset ids and values in javascript
-        user_form = user_formset._construct_form(
-            form_count,
-            initial={'user': user, 'role': role})
-
-        rendered_form = loader.get_template(
-            'admin/cmsroles/user_form.html').render(Context({'form': user_form}))
-        response_dict = {
-            'success': True,
-            'add_user_form': AddUserForm().as_p(),
-            'user_form': rendered_form}
-    else:
-        response_dict = {
-            'success': False,
-            # add_user_form will contain the errors
-            'add_user_form': add_user_form.as_p()}
-    return HttpResponse(simplejson.dumps(response_dict),
-                        content_type="application/json")
-
-
-@user_passes_test(is_site_admin, login_url='/admin/')
-def delete_user(request):
-    if request.method != 'POST':
-        return HttpResponseNotAllowed()
-    site_pk = request.POST.get('site')
-    # we don't care about the returned values. This is only for
-    # validating that the user actually has site admin rights over
-    # the site
-    current_site, _ = _get_user_sites(request.user, site_pk)

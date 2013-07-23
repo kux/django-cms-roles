@@ -50,44 +50,23 @@
     {{ user_formset.non_form_errors }}
     <div id="user_formset_fields">
       {% for form in user_formset %}
-        {% include "admin/cmsroles/user_form.html" %}
+        {% include "admin/cmsroles/user_form.html" %}      
       {% endfor %}
+      
     </div>
     <input id="next_on_save" name="next" type="hidden" value="continue"/>
   </form>
-
-
 </div>
+
 <div class="submit-row">
   <input id="save" type="submit" class="default" value="Save" />
   <input id="save_and_continue" type="submit" value="Save and continue editing" />
 </div>
 
-{% if user.is_superuser %}
-<div id="add_user_section" class="module aligned wide">
-  <form method="post" id="add_user_form" style="margin-top: 30px"/>
-      {% csrf_token %}
-      {% comment %}
-        <!-- the value will be dynamically set through js on form submit time -->
-        <!-- for now... set it to 0 -->
-      {% endcomment %}
-      <input id="add_user_form_count" name="form_count" type="hidden" value="0"/>
-      <div id="add_user_form_fields">
-        {{ new_user_form.as_p }}
-      </div>
-      <input type="hidden" name="site" value="{{current_site.pk}}"/>
-  </form>
-</div>
-
-<div class="submit-row">
-  <input id="add_user_button" type="submit" value="Add User"/>
-</div>
-{% endif %}
-
-
 <script type="text/javascript" src="{% admin_media_prefix %}js/core.js"></script>
 <script type="text/javascript" src="{% admin_media_prefix %}js/admin/RelatedObjectLookups.js"></script>
 <script type="text/javascript" src="{% admin_media_prefix %}js/jquery.js"></script>
 <script type="text/javascript" src="{% admin_media_prefix %}js/jquery.init.js"></script>
+<script type="text/javascript" src="{% admin_media_prefix %}cmsroles/js/jquery.formset.js"></script>
 <script type="text/javascript" src="{% admin_media_prefix %}cmsroles/js/user_setup.js"></script>
 {% endblock %}
