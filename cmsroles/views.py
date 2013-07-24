@@ -35,7 +35,9 @@ class BaseUserFormSet(BaseFormSet):
                 continue
             if user in users:
                 raise forms.ValidationError(
-                    "A User can't have multiple roles in the same site")
+                    "User %s has multiple roles. "
+                    "A User can't have multiple roles in the same site"
+                    % user.username)
             users.add(user)
 
 

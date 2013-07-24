@@ -27,11 +27,17 @@ def get_administered_sites(user):
     if user.is_superuser:
         return [s for s in Site.objects.all()]
     sites = []
+
+    def lookup_sites(auth_obj):
+        for global_perm in auth_obj.globalpagepermission_set.\
+                prefetch_related('sites').all():
+            sites.extend(global_perm.sites.all())
+
     for group in user.groups.all():
         if is_site_admin_group(group):
-            for global_perm in group.globalpagepermission_set.\
-                    prefetch_related('sites').all():
-                sites.extend(global_perm.sites.all())
+            lookup_sites(group)
+    lookup_sites(user)
+
     return sites
 
 

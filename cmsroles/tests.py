@@ -69,6 +69,18 @@ class BasicSiteSetupTest(TestCase):
         self.assertEquals([s.domain for s in administered_sites],
                           ['bar.site.com'])
 
+    def test_get_administered_sites_with_user_referencing_glob_page_(self):
+        foo_site = Site.objects.create(name='foo.site.com', domain='foo.site.com')
+        admin_user = User.objects.create(username='gigi', password='baston')
+        site_admin_perms = Permission.objects.filter(content_type__model='user')
+        for perm in site_admin_perms:
+            admin_user.user_permissions.add(perm)
+        gpp = GlobalPagePermission.objects.create(user=admin_user)
+        gpp.sites.add(foo_site)
+        administered_sites = get_administered_sites(admin_user)
+        self.assertEquals(len(administered_sites), 1)
+        self.assertEquals([s.pk for s in administered_sites], [foo_site.pk])
+
     def test_not_accessible_for_non_siteadmins(self):
         joe = User.objects.create_user(
             username='joe', password='x', email='joe@mata.com')
