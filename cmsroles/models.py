@@ -6,6 +6,7 @@ from django.db.models import signals, Q
 from django.utils.translation import ugettext_lazy as _
 
 from cms.models.permissionmodels import AbstractPagePermission, GlobalPagePermission
+from parse import parse
 
 
 def get_permission_fields():
@@ -24,6 +25,8 @@ class Role(AbstractPagePermission):
         verbose_name = _('role')
         verbose_name_plural = _('roles')
 
+    group_name_pattern = 'cmsroles-generated-{site_id}-{group_id}'
+
     name = models.CharField(max_length=50, unique=True)
     derived_global_permissions = models.ManyToManyField(
         GlobalPagePermission, blank=True, null=True)
@@ -40,8 +43,28 @@ class Role(AbstractPagePermission):
         if query.exists():
             raise ValidationError(u'A Role for group "%s" already exists' % self.group.name)
 
+    def _update_site_groups_permissions(self):
+        new_group_permissions = self.group.permissions.all()
+        global_perm_q = self.derived_global_permissions.select_related(
+            'group').prefetch_related('group__permissions')
+        site_groups = [global_perm.group for global_perm in global_perm_q]
+        for site_group in site_groups:
+            # change permissions
+            site_group.permissions = new_group_permissions
+            # rename group
+            parsed_name = parse(self.group_name_pattern, site_group.name)
+            site_group.name = self.group_name_pattern.format(
+                site_id=parsed_name['site_id'], group_id=self.group.id)
+            site_group.save()
+
     def save(self, *args, **kwargs):
+        old_group = Role.objects.get(id=self.id).group_id if self.id else None
         super(Role, self).save(*args, **kwargs)
+
+        group_changed = old_group is not None and old_group != self.group_id
+        if group_changed:
+            self._update_site_groups_permissions()
+
         # TODO: improve performance by having less queries
         derived_global_permissions = self.derived_global_permissions.all()
         covered_sites = set(derived_global_permissions.values_list('sites', flat=True))
@@ -67,7 +90,8 @@ class Role(AbstractPagePermission):
         site_group = Group.objects.get(pk=self.group.pk)
         permissions = self.group.permissions.all()
         site_group.pk = None
-        site_group.name = 'cmsroles-generated-%d-%d' % (site.pk, self.group.pk)
+        site_group.name = self.group_name_pattern.format(
+            site_id=site.pk, group_id=self.group.pk)
         site_group.save()
         site_group.permissions = permissions
         kwargs = self._get_permissions_dict()
