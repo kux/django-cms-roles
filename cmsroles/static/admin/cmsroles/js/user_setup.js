@@ -3,8 +3,8 @@ django.jQuery(document).ready(function(){
     var $ = django.jQuery;
 
     $('.user_settings').formset({
-        addText: 'Assign another user',
-        deleteText: 'Unassing user from this site'
+        addText: 'Assign another user to this site',
+        deleteText: ''
     });
 
     $('#site_selector').change(function(){

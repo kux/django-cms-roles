@@ -9,6 +9,7 @@
 .user_settings {
     padding-top: 3px;
     border-bottom: 1px solid #ccc;
+    position: relative;
 }
 
 #content select{
@@ -39,4 +40,25 @@
 #add_user_form label{
     font-weight: bold !important;
     color: #333;
+}
+
+.add-row{
+    background: url(../img/icon_addlink.gif) 0 .2em no-repeat;
+    padding-left: 14px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+    margin-left: 5px;
+    display: block;
+}
+
+.delete-row{
+    text-indent: -9999px;
+    width: 15px;
+    height: 15px;
+    border: 0px none;
+    outline: 0;
+    background: transparent url(../img/inline-delete.png) no-repeat;
+    position: absolute;
+    right: 5px;
+    top: 5px;
 }
