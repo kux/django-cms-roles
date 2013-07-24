@@ -70,8 +70,8 @@ class Role(AbstractPagePermission):
         covered_sites = set(derived_global_permissions.values_list('sites', flat=True))
         for site in Site.objects.exclude(pk__in=covered_sites):
             self.add_site_specific_global_page_perm(site)
+        permissions = self._get_permissions_dict()
         for gp in derived_global_permissions:
-            permissions = self._get_permissions_dict()
             for key, value in permissions.iteritems():
                 setattr(gp, key, value)
             gp.save()
