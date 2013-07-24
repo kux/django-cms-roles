@@ -1,14 +1,12 @@
 from django.test import TestCase
-from django.test.client import Client
 from django.contrib.auth.models import User, Group, Permission
 from django.contrib.sites.models import Site
 from django.core.exceptions import ValidationError
 
-
 from cms.models.permissionmodels import GlobalPagePermission
 
 from cmsroles.models import Role
-from cmsroles.siteadmin import is_site_admin, get_administered_sites
+from cmsroles.siteadmin import is_site_admin, get_administered_sites, get_site_users
 
 
 class BasicSiteSetupTest(TestCase):
@@ -28,6 +26,9 @@ class BasicSiteSetupTest(TestCase):
     def _create_simple_setup(self):
         """Creates two sites, three roles and five users that have
         different foles within the two sites.
+
+        Many tests depend on this particular setup. If you want to add
+        more users, sites, roles, create a new method which calls this one...
         """
         foo_site = Site.objects.create(name='foo.site.com', domain='foo.site.com')
         bar_site = Site.objects.create(name='bar.site.com', domain='bar.site.com')
@@ -236,3 +237,105 @@ class BasicSiteSetupTest(TestCase):
         role_from_derived_group = Role(name='site admin 2', group=derived_group)
         with self.assertRaises(ValidationError):
             role_from_derived_group.clean()
+
+    def _get_foo_site_objs(self):
+        foo_site = Site.objects.get(name='foo.site.com', domain='foo.site.com')
+        joe = User.objects.get(username='joe')
+        admin = Role.objects.get(name='site admin')
+        george = User.objects.get(username='george')
+        developer = Role.objects.get(name='developer')
+        robin = User.objects.get(username='robin')
+        editor = Role.objects.get(name='editor')
+        return foo_site, joe, admin, george, developer, robin, editor
+
+    def test_user_formset_submit_change_roles(self):
+        self._create_simple_setup()
+        # users assigned to foo.site.com:
+        # joe: site admin, george: developer, robin: editor
+        foo_site, joe, _, george, developer, robin, editor = self._get_foo_site_objs()
+        self.client.login(username='root', password='root')
+        response = self.client.post('/admin/cmsroles/usersetup/?site=%s' % foo_site.pk, {
+                # management form
+                u'form-MAX_NUM_FORMS': [u''],
+                u'form-TOTAL_FORMS': [u'3'],
+                u'form-INITIAL_FORMS': [u'3'],
+                # change joe to a developer
+                u'form-0-user': [unicode(joe.pk)],
+                u'form-0-role': [unicode(developer.pk)],
+                # george to an editor
+                u'form-1-user': [unicode(george.pk)],
+                u'form-1-role': [unicode(editor.pk)],
+                # robin stays the same
+                u'form-2-user': [unicode(robin.pk)],
+                u'form-2-role': [unicode(editor.pk)],
+                u'next': [u'continue']}
+                )
+        self.assertEqual(response.status_code, 302)
+        users_to_roles = get_site_users(foo_site)
+        user_pks_to_role_pks = dict((u.pk, r.pk) for u, r in users_to_roles.iteritems())
+        self.assertEqual(len(user_pks_to_role_pks), 3)
+        self.assertEqual(user_pks_to_role_pks[joe.pk], developer.pk)
+        self.assertEqual(user_pks_to_role_pks[george.pk], editor.pk)
+        self.assertEqual(user_pks_to_role_pks[robin.pk], editor.pk)
+
+    def test_user_formset_submit_unassign_user(self):
+        self._create_simple_setup()
+        # users assigned to foo.site.com:
+        # joe: site admin, george: developer, robin: editor
+        foo_site, joe, admin, george, developer, _, _ = self._get_foo_site_objs()
+        self.client.login(username='root', password='root')
+        response = self.client.post('/admin/cmsroles/usersetup/?site=%s' % foo_site.pk, {
+                # management form
+                u'form-MAX_NUM_FORMS': [u''],
+                u'form-TOTAL_FORMS': [u'2'],
+                u'form-INITIAL_FORMS': [u'2'],
+                # joe remains an admin
+                u'form-0-user': [unicode(joe.pk)],
+                u'form-0-role': [unicode(admin.pk)],
+                # george remains a developer
+                u'form-1-user': [unicode(george.pk)],
+                u'form-1-role': [unicode(developer.pk)],
+                # but robin gets removed !!
+                u'next': [u'continue']}
+                )
+        self.assertEqual(response.status_code, 302)
+        users_to_roles = get_site_users(foo_site)
+        user_pks_to_role_pks = dict((u.pk, r.pk) for u, r in users_to_roles.iteritems())
+        self.assertEqual(len(user_pks_to_role_pks), 2)
+        self.assertEqual(user_pks_to_role_pks[joe.pk], admin.pk)
+        self.assertEqual(user_pks_to_role_pks[george.pk], developer.pk)
+
+    def test_user_formset_submit_assign_new_user(self):
+        self._create_simple_setup()
+        # users assigned to foo.site.com:
+        # joe: site admin, george: developer, robin: editor
+        foo_site, joe, admin, george, developer, robin, editor = self._get_foo_site_objs()
+        criss = User.objects.get(username='criss')
+        self.client.login(username='root', password='root')
+        response = self.client.post('/admin/cmsroles/usersetup/?site=%s' % foo_site.pk, {
+                # management form
+                u'form-MAX_NUM_FORMS': [u''],
+                u'form-TOTAL_FORMS': [u'4'],
+                u'form-INITIAL_FORMS': [u'4'],
+                # joe remains an admin
+                u'form-0-user': [unicode(joe.pk)],
+                u'form-0-role': [unicode(admin.pk)],
+                # george remains a developer
+                u'form-1-user': [unicode(george.pk)],
+                u'form-1-role': [unicode(developer.pk)],
+                # robin remains an editor
+                u'form-2-user': [unicode(robin.pk)],
+                u'form-2-role': [unicode(editor.pk)],
+                # but we also add criss to foo_site
+                u'form-3-user': [unicode(criss.pk)],
+                u'form-3-role': [unicode(admin.pk)],
+                u'next': [u'continue']}
+                )
+        self.assertEqual(response.status_code, 302)
+        users_to_roles = get_site_users(foo_site)
+        user_pks_to_role_pks = dict((u.pk, r.pk) for u, r in users_to_roles.iteritems())
+        self.assertEqual(len(user_pks_to_role_pks), 4)
+        self.assertEqual(user_pks_to_role_pks[joe.pk], admin.pk)
+        self.assertEqual(user_pks_to_role_pks[george.pk], developer.pk)
+        self.assertEqual(user_pks_to_role_pks[robin.pk], editor.pk)
+        self.assertEqual(user_pks_to_role_pks[criss.pk], admin.pk)
