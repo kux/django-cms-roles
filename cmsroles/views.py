@@ -1,14 +1,13 @@
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.models import User
-from django.contrib.auth.forms import UserCreationForm
+from django.contrib.sites.models import Site
 from django.core.exceptions import PermissionDenied
 from django.core.urlresolvers import reverse
 from django import forms
 from django.forms.formsets import formset_factory, BaseFormSet
-from django.http import HttpResponseNotAllowed, HttpResponse, HttpResponseRedirect
+from django.http import HttpResponseRedirect
 from django.shortcuts import render_to_response
-from django.utils import simplejson
-from django.template import RequestContext, loader, Context
+from django.template import RequestContext
 
 from cmsroles.siteadmin import get_administered_sites, \
     get_site_users, is_site_admin
@@ -16,18 +15,12 @@ from cmsroles.models import Role
 
 
 class UserForm(forms.Form):
-    user = forms.ModelChoiceField(queryset=User.objects.filter(is_staff=True))
-    role = forms.ModelChoiceField(queryset=Role.objects.all())
-
-
-class AddUserForm(UserCreationForm):
-    role = forms.ModelChoiceField(queryset=Role.objects.all())
-
-    def save(self, commit=True):
-        user = super(AddUserForm, self).save(commit=False)
-        if commit:
-            user.save()
-        return user
+    user = forms.ModelChoiceField(
+        queryset=User.objects.filter(is_staff=True),
+                                  required=False)
+    role = forms.ModelChoiceField(
+        queryset=Role.objects.all(),
+        required=False)
 
 
 class BaseUserFormSet(BaseFormSet):
@@ -37,7 +30,9 @@ class BaseUserFormSet(BaseFormSet):
             return
         users = set()
         for form in self.forms:
-            user = form.cleaned_data['user']
+            user = form.cleaned_data.get('user', None)
+            if user is None:
+                continue
             if user in users:
                 raise forms.ValidationError(
                     "A User can't have multiple roles in the same site")
@@ -61,32 +56,71 @@ def _get_user_sites(user, site_pk):
                 administered_sites)
 
 
+def _get_site_pk(request):
+    """Get's the current site's pk by first checking for a
+    GET request parameter. If that's unavailable it uses
+    the current request's Host header
+    """
+    site_pk = request.GET.get('site', None)
+    if site_pk is not None:
+        return site_pk
+
+    host = request.META.get('HTTP_HOST', None)
+    if host is not None:
+        try:
+            site_pk = Site.objects.get(domain=host).pk
+        except Site.DoesNotExist:
+            pass
+    return site_pk
+
+
 @user_passes_test(is_site_admin, login_url='/admin/')
 def user_setup(request):
-    site_pk = request.GET.get('site')
+    site_pk = _get_site_pk(request)
     current_site, administered_sites = _get_user_sites(request.user, site_pk)
-    new_user_form = AddUserForm()
-    UserFormSet = formset_factory(UserForm, formset=BaseUserFormSet, extra=0)
+    UserFormSet = formset_factory(UserForm, formset=BaseUserFormSet, extra=1)
+
+    assigned_users = get_site_users(current_site)
+
     if request.method == 'POST':
         user_formset = UserFormSet(request.POST, request.FILES)
         if user_formset.is_valid():
+            newly_assigned_users = []
+            existing_users = []
             for form in user_formset.forms:
-                user = form.cleaned_data['user']
-                role = form.cleaned_data['role']
-                # TODO: are there any cases where a user might belong to
-                #       non-role generated groups?
-                user.groups.clear()
+                user = form.cleaned_data.get('user', None)
+                role = form.cleaned_data.get('role', None)
+                if user is None or role is None:
+                    continue
+                if user not in assigned_users:
+                    newly_assigned_users.append((user, role))
+                else:
+                    existing_users.append((user, role))
+            unassigned_users = [
+                (user, role) for user, role in assigned_users.iteritems()
+                if user not in existing_users]
+            for user, role in unassigned_users:
+                user.groups.remove(role.get_site_specific_group(current_site))
+            for user, role in newly_assigned_users:
                 user.groups.add(role.get_site_specific_group(current_site))
+            for user, new_role in existing_users:
+                previous_role = assigned_users[user]
+                user.groups.remove(previous_role.get_site_specific_group(current_site))
+                user.groups.add(new_role.get_site_specific_group(current_site))
+
             next_action = request.POST['next']
             if next_action == u'continue':
-                return HttpResponseRedirect(reverse(user_setup))
+                if site_pk is not None:
+                    next_url = '%s?site=%s' % (reverse(user_setup), site_pk)
+                else:
+                    next_url = reverse(user_setup)
+                return HttpResponseRedirect(next_url)
             else:
                 return HttpResponseRedirect('/admin/')
     else:
-        available_users = get_site_users(current_site)
         initial_data = [
             {'user': user, 'role': role}
-            for user, role in available_users.iteritems()]
+            for user, role in assigned_users.iteritems()]
         user_formset = UserFormSet(initial=initial_data)
     opts = {'app_label': 'cmsroles'}
     context = {'opts': opts,
@@ -94,56 +128,6 @@ def user_setup(request):
                'administered_sites': administered_sites,
                'current_site': current_site,
                'user_formset': user_formset,
-               'user': request.user,
-               'new_user_form': new_user_form}
+               'user': request.user}
     return render_to_response('admin/cmsroles/user_setup.html', context,
                               context_instance=RequestContext(request))
-
-
-@user_passes_test(is_site_admin, login_url='/admin/')
-def add_user(request):
-    if request.method != 'POST':
-        return HttpResponseNotAllowed()
-    site_pk = request.POST.get('site')
-    current_site, _ = _get_user_sites(request.user, site_pk)
-    add_user_form = AddUserForm(request.POST)
-    if add_user_form.is_valid():
-        user = add_user_form.instance
-        user.is_staff = True
-        add_user_form.save()
-        role = add_user_form.cleaned_data['role']
-        user.groups.add(role.get_site_specific_group(current_site))
-
-        form_count = int(request.POST.get('form_count'))
-        UserFormSet = formset_factory(UserForm, formset=BaseUserFormSet, extra=0)
-        user_formset = UserFormSet()
-        # calling a protected method is ugly but it's still much better
-        # than setting formset ids and values in javascript
-        user_form = user_formset._construct_form(
-            form_count,
-            initial={'user': user, 'role': role})
-
-        rendered_form = loader.get_template(
-            'admin/cmsroles/user_form.html').render(Context({'form': user_form}))
-        response_dict = {
-            'success': True,
-            'add_user_form': AddUserForm().as_p(),
-            'user_form': rendered_form}
-    else:
-        response_dict = {
-            'success': False,
-            # add_user_form will contain the errors
-            'add_user_form': add_user_form.as_p()}
-    return HttpResponse(simplejson.dumps(response_dict),
-                        content_type="application/json")
-
-
-@user_passes_test(is_site_admin, login_url='/admin/')
-def delete_user(request):
-    if request.method != 'POST':
-        return HttpResponseNotAllowed()
-    site_pk = request.POST.get('site')
-    # we don't care about the returned values. This is only for
-    # validating that the user actually has site admin rights over
-    # the site
-    current_site, _ = _get_user_sites(request.user, site_pk)
