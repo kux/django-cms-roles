@@ -188,11 +188,31 @@ class BasicSiteSetupTest(TestCase):
         base_site_admin_group = self._create_site_adimin_group()
         admin_role = Role.objects.create(name='site admin', group=base_site_admin_group)
         generated_group = admin_role.get_site_specific_group(foo_site)
-        self.assertEqual(generated_group.name, 'cmsroles-generated-%d-%d' % (
-                foo_site.pk, base_site_admin_group.pk))
+        self.assertEqual(generated_group.name, Role.group_name_pattern.format(
+            site_id=foo_site.pk, group_id=base_site_admin_group.pk))
         generated_group = admin_role.get_site_specific_group(bar_site)
-        self.assertEqual(generated_group.name, 'cmsroles-generated-%d-%d' % (
-                bar_site.pk, base_site_admin_group.pk))
+        self.assertEqual(generated_group.name, Role.group_name_pattern.format(
+            site_id=bar_site.pk, group_id=base_site_admin_group.pk))
+
+    def test_site_group_perms_change_on_role_group_change(self):
+        foo_site = Site.objects.create(
+            name='foo.site.com', domain='foo.site.com')
+        g1 = Group.objects.create(name='g1')
+        g1.permissions = Permission.objects.filter(
+            content_type__model='page')
+        g2 = Group.objects.create(name='g2')
+        g2.permissions = Permission.objects.filter(
+            content_type__model='user')
+        role = Role.objects.create(name='editor', group=g1)
+        self.assertItemsEqual(
+            role.group.permissions.values_list('id', flat=True),
+            g1.permissions.values_list('id', flat=True))
+        role.group = g2
+        role.save()
+        self.assertItemsEqual(
+            Role.objects.get(
+                id=role.id).group.permissions.values_list('id', flat=True),
+            g2.permissions.values_list('id', flat=True))
 
     def test_changes_in_role_reflected_in_global_perms(self):
         self._create_simple_setup()
