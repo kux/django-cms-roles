@@ -4,7 +4,7 @@ from django.db import models
 from django.forms import ModelForm, ModelChoiceField
 
 from cmsroles.models import Role, get_permission_fields
-from cmsroles.siteadmin import is_site_admin
+from cmsroles.siteadmin import is_site_admin, get_administered_sites
 
 
 class RoleForm(ModelForm):
@@ -53,7 +53,10 @@ class UserSetupAdmin(admin.ModelAdmin):
         return False
 
     def has_change_permission(self, request, obj=None):
-        return is_site_admin(request.user)
+        # should be available only to superusers and to site admins that
+        #   have at least one site under their control
+        user = request.user
+        return is_site_admin(user) and get_administered_sites(user)
 
 admin.site.register(Role, RoleAdmin)
 admin.site.register(UserSetup, UserSetupAdmin)
