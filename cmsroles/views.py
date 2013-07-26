@@ -17,10 +17,18 @@ from cmsroles.models import Role
 class UserForm(forms.Form):
     user = forms.ModelChoiceField(
         queryset=User.objects.filter(is_staff=True),
-        required=True)
+        required=False)
     role = forms.ModelChoiceField(
         queryset=Role.objects.all(),
-        required=True)
+        required=False)
+
+    def clean(self):
+        cleaned_data = super(UserForm, self).clean()
+        user = cleaned_data.get('user', None)
+        role = cleaned_data.get('role', None)
+        if (user is None) != (role is None):
+            raise forms.ValidationError('Both user and role need to be set')
+        return cleaned_data
 
 
 class BaseUserFormSet(BaseFormSet):
