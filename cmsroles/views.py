@@ -17,10 +17,10 @@ from cmsroles.models import Role
 class UserForm(forms.Form):
     user = forms.ModelChoiceField(
         queryset=User.objects.filter(is_staff=True),
-                                  required=False)
+        required=True)
     role = forms.ModelChoiceField(
         queryset=Role.objects.all(),
-        required=False)
+        required=True)
 
 
 class BaseUserFormSet(BaseFormSet):
@@ -92,7 +92,7 @@ def user_setup(request):
             for form in user_formset.forms:
                 user = form.cleaned_data.get('user', None)
                 role = form.cleaned_data.get('role', None)
-                if user is None or role is None:
+                if user is None and role is None:
                     continue
                 if user not in assigned_users:
                     newly_assigned_users.append((user, role))
