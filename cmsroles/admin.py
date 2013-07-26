@@ -56,7 +56,7 @@ class UserSetupAdmin(admin.ModelAdmin):
         # should be available only to superusers and to site admins that
         #   have at least one site under their control
         user = request.user
-        return is_site_admin(user) and get_administered_sites(user)
+        return is_site_admin(user) and len(get_administered_sites(user)) > 0
 
 admin.site.register(Role, RoleAdmin)
 admin.site.register(UserSetup, UserSetupAdmin)
