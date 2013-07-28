@@ -9,6 +9,8 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import render_to_response
 from django.template import RequestContext
 
+from cms.models.pagemodel import Page
+
 from cmsroles.siteadmin import get_administered_sites, \
     get_site_users, is_site_admin
 from cmsroles.models import Role
@@ -21,6 +23,12 @@ class UserForm(forms.Form):
     role = forms.ModelChoiceField(
         queryset=Role.objects.all(),
         required=False)
+    site = forms.ModelChoiceField(
+        queryset=Site.objects.all(),
+        widget=forms.HiddenInput())
+
+    def __niit__(self, *args, **kwargs):
+        super(UserForm, self).__init__(*args, **kwargs)
 
     def clean(self):
         cleaned_data = super(UserForm, self).clean()
@@ -28,6 +36,13 @@ class UserForm(forms.Form):
         role = cleaned_data.get('role', None)
         if (user is None) != (role is None):
             raise forms.ValidationError('Both user and role need to be set')
+        if role is not None and not role.is_site_wide:
+            site = self.cleaned_data.get('site', None)
+            if not Page.objects.filter(site=site).exists():
+                raise forms.ValidationError(
+                    'Site needs to have at least one page '
+                    'before you can grant this role to an user')
+
         return cleaned_data
 
 
@@ -39,6 +54,7 @@ class BaseUserFormSet(BaseFormSet):
         users = set()
         for form in self.forms:
             user = form.cleaned_data.get('user', None)
+            role = form.cleaned_data.get('role', None)
             if user is None:
                 continue
             if user in users:
@@ -110,14 +126,13 @@ def user_setup(request):
                 (user, role) for user, role in assigned_users.iteritems()
                 if user not in existing_users]
             for user, role in unassigned_users:
-                user.groups.remove(role.get_site_specific_group(current_site))
+                role.ungrant_from_user(user, current_site)
             for user, role in newly_assigned_users:
-                user.groups.add(role.get_site_specific_group(current_site))
+                role.grant_to_user(user, current_site)
             for user, new_role in existing_users:
                 previous_role = assigned_users[user]
-                user.groups.remove(previous_role.get_site_specific_group(current_site))
-                user.groups.add(new_role.get_site_specific_group(current_site))
-
+                previous_role.ungrant_from_user(user, current_site)
+                new_role.grant_to_user(user, current_site)
             next_action = request.POST['next']
             if next_action == u'continue':
                 if site_pk is not None:
@@ -129,7 +144,7 @@ def user_setup(request):
                 return HttpResponseRedirect('/admin/')
     else:
         initial_data = [
-            {'user': user, 'role': role}
+            {'user': user, 'role': role, 'site': current_site}
             for user, role in assigned_users.iteritems()]
         user_formset = UserFormSet(initial=initial_data)
     opts = {'app_label': 'cmsroles'}
