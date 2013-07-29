@@ -13,21 +13,21 @@ class Migration(SchemaMigration):
                       self.gf('django.db.models.fields.BooleanField')(default=True),
                       keep_default=False)
 
-        # Adding M2M table for field page_permissions on 'Role'
-        db.create_table('cmsroles_role_page_permissions', (
+        # Adding M2M table for field derived_page_permissions on 'Role'
+        db.create_table('cmsroles_role_derived_page_permissions', (
             ('id', models.AutoField(verbose_name='ID', primary_key=True, auto_created=True)),
             ('role', models.ForeignKey(orm['cmsroles.role'], null=False)),
             ('pagepermission', models.ForeignKey(orm['cms.pagepermission'], null=False))
         ))
-        db.create_unique('cmsroles_role_page_permissions', ['role_id', 'pagepermission_id'])
+        db.create_unique('cmsroles_role_derived_page_permissions', ['role_id', 'pagepermission_id'])
 
 
     def backwards(self, orm):
         # Deleting field 'Role.is_site_wide'
         db.delete_column('cmsroles_role', 'is_site_wide')
 
-        # Removing M2M table for field page_permissions on 'Role'
-        db.delete_table('cmsroles_role_page_permissions')
+        # Removing M2M table for field derived_page_permissions on 'Role'
+        db.delete_table('cmsroles_role_derived_page_permissions')
 
 
     models = {
@@ -144,11 +144,11 @@ class Migration(SchemaMigration):
             'can_set_navigation': ('django.db.models.fields.BooleanField', [], {'default': 'True'}),
             'can_view': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
             'derived_global_permissions': ('django.db.models.fields.related.ManyToManyField', [], {'symmetrical': 'False', 'to': "orm['cms.GlobalPagePermission']", 'null': 'True', 'blank': 'True'}),
+            'derived_page_permissions': ('django.db.models.fields.related.ManyToManyField', [], {'symmetrical': 'False', 'to': "orm['cms.PagePermission']", 'null': 'True', 'blank': 'True'}),
             'group': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['auth.Group']", 'null': 'True', 'blank': 'True'}),
             'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'is_site_wide': ('django.db.models.fields.BooleanField', [], {'default': 'True'}),
             'name': ('django.db.models.fields.CharField', [], {'unique': 'True', 'max_length': '50'}),
-            'page_permissions': ('django.db.models.fields.related.ManyToManyField', [], {'symmetrical': 'False', 'to': "orm['cms.PagePermission']", 'null': 'True', 'blank': 'True'}),
             'user': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['auth.User']", 'null': 'True', 'blank': 'True'})
         },
         'contenttypes.contenttype': {

@@ -60,6 +60,18 @@ class BasicSiteSetupTest(TestCase):
         vasile = User.objects.create(username='vasile', is_staff=True)
         vasile.groups.add(editor_role.get_site_specific_group(bar_site))
 
+
+    def _create_non_site_wide_role(self):
+        writer_group = Group.objects.create(name='writer')
+        writer_role = Role.objects.create(
+            name='writer', group=writer_group, is_site_wide=False,
+            can_add=False)
+        foo_site = Site.objects.create(name='foo.site.com', domain='foo.site.com')
+        user = User.objects.create(username='gigi', is_staff=True)
+        create_page('master', 'template.html', language='en', site=foo_site)
+        writer_role.grant_to_user(user, foo_site)
+        return writer_role, user, foo_site
+
     def test_is_admin(self):
         self._create_simple_setup()
         joe = User.objects.get(username='joe')
@@ -133,33 +145,21 @@ class BasicSiteSetupTest(TestCase):
                              set(site_admin_group.permissions.all()))
 
     def test_assign_user_to_non_site_wide_role(self):
-        writer_group = Group.objects.create(name='writer')
-        writer_role = Role.objects.create(
-            name='writer', group=writer_group, is_site_wide=False)
-        foo_site = Site.objects.create(name='foo.site.com', domain='foo.site.com')
-        joe = User.objects.create(username='joe', is_staff=True)
-        create_page('master', 'template.html', language='en', site=foo_site)
-        writer_role.grant_to_user(joe, foo_site)
-        page_perms = PagePermission.objects.filter(user=joe)
+        writer_role, user, foo_site = self._create_non_site_wide_role()
+        page_perms = PagePermission.objects.filter(user=user)
         self.assertEqual(len(page_perms), 1)
         users = writer_role.users(foo_site)
-        self.assertItemsEqual([u.pk for u in users], [joe.pk])
+        self.assertItemsEqual([u.pk for u in users], [user.pk])
 
     def test_switch_role_form_site_wide_to_non_wide(self):
-        writer_group = Group.objects.create(name='writer')
-        writer_role = Role.objects.create(
-            name='writer', group=writer_group, is_site_wide=False)
-        foo_site = Site.objects.create(name='foo.site.com', domain='foo.site.com')
-        joe = User.objects.create(username='joe', is_staff=True)
-        create_page('master', 'template.html', language='en', site=foo_site)
-        writer_role.grant_to_user(joe, foo_site)
+        writer_role, user, foo_site = self._create_non_site_wide_role()
         writer_role.is_site_wide = True
         writer_role.save()
-        self.assertFalse(writer_role.page_permissions.exists())
+        self.assertFalse(writer_role.derived_page_permissions.exists())
         self.assertTrue(writer_role.derived_global_permissions.exists())
         users = writer_role.users(foo_site)
-        self.assertItemsEqual([u.pk for u in users], [joe.pk])
-        self.assertTrue(writer_role.derived_global_permissions.filter(group__user=joe).exists())
+        self.assertItemsEqual([u.pk for u in users], [user.pk])
+        self.assertTrue(writer_role.derived_global_permissions.filter(group__user=user).exists())
 
     def test_cant_create_two_roles_based_on_the_same_group(self):
         site_admin_group = self._create_site_admin_group()
@@ -266,6 +266,16 @@ class BasicSiteSetupTest(TestCase):
         developer_role.save()
         for gp in developer_role.derived_global_permissions.all():
             self.assertEqual(gp.can_add, developer_role.can_add)
+
+    def test_changes_in_role_relected_in_page_perms(self):
+        writer_role, _, _ = self._create_non_site_wide_role()
+        self.assertEqual(writer_role.derived_page_permissions.count(), 1)
+        for page_perm in writer_role.derived_page_permissions.all():
+            self.assertFalse(page_perm.can_add)
+        writer_role.can_add = True
+        writer_role.save()
+        for page_perm in writer_role.derived_page_permissions.all():
+            self.assertTrue(page_perm.can_add)
 
     def test_changes_in_base_group_reflected_in_generated_ones(self):
 

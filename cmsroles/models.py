@@ -22,10 +22,10 @@ def get_permission_fields():
 class Role(AbstractPagePermission):
     """
     When is_site_wide is True this role uses derived_global_permissions
-    When is_site_wide is False this role uses page_permissions
+    When is_site_wide is False this role uses derived_page_permissions
 
     The class invariant is that one of derived_global_permissions and
-    page_permissions must be empty at all times
+    derived_page_permissions must be empty at all times
     """
 
     class Meta:
@@ -45,7 +45,7 @@ class Role(AbstractPagePermission):
         GlobalPagePermission, blank=True, null=True)
 
     # used when is_site_wide is False
-    page_permissions = models.ManyToManyField(
+    derived_page_permissions = models.ManyToManyField(
         PagePermission, blank=True, null=True)
 
     def __unicode__(self):
@@ -78,6 +78,13 @@ class Role(AbstractPagePermission):
                 site_id=parsed_name['site_id'], group_id=self.group.id)
             site_group.save()
 
+    def _propagate_perm_changes(self, derived_perms):
+        permissions = self._get_permissions_dict()
+        for gp in derived_perms:
+            for key, value in permissions.iteritems():
+                setattr(gp, key, value)
+            gp.save()
+
     def save(self, *args, **kwargs):
         super(Role, self).save(*args, **kwargs)
 
@@ -92,15 +99,13 @@ class Role(AbstractPagePermission):
             covered_sites = set(derived_global_permissions.values_list('sites', flat=True))
             for site in Site.objects.exclude(pk__in=covered_sites):
                 self.add_site_specific_global_page_perm(site)
-            permissions = self._get_permissions_dict()
-            for gp in derived_global_permissions:
-                for key, value in permissions.iteritems():
-                    setattr(gp, key, value)
-                gp.save()
+            self._propagate_perm_changes(derived_global_permissions)
+        else:
+            self._propagate_perm_changes(self.derived_page_permissions.all())
 
         if self.is_site_wide != self._old_is_site_wide:
             if self.is_site_wide:
-                for page_perm in self.page_permissions.all():
+                for page_perm in self.derived_page_permissions.all():
                     self.grant_to_user(page_perm.user, page_perm.page.site)
                     page_perm.delete()
             else:
@@ -120,7 +125,7 @@ class Role(AbstractPagePermission):
         for global_perm in self.derived_global_permissions.all():
             # global_perm will also get deleted by cascading from global_perm.group
             global_perm.group.delete()
-        for page_perm in self.page_permissions.all():
+        for page_perm in self.derived_page_permissions.all():
             page_perm.delete()
         return super(Role, self).delete(*args, **kwargs)
 
@@ -161,7 +166,7 @@ class Role(AbstractPagePermission):
                 for key, value in self._get_permissions_dict().iteritems():
                     setattr(page_permission, key, value)
                 page_permission.save()
-                self.page_permissions.add(page_permission)
+                self.derived_page_permissions.add(page_permission)
                 user.groups.add(self.group)
 
     def ungrant_from_user(self, user, site):
