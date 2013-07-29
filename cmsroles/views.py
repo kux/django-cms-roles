@@ -27,9 +27,6 @@ class UserForm(forms.Form):
         queryset=Site.objects.all(),
         widget=forms.HiddenInput())
 
-    def __niit__(self, *args, **kwargs):
-        super(UserForm, self).__init__(*args, **kwargs)
-
     def clean(self):
         cleaned_data = super(UserForm, self).clean()
         user = cleaned_data.get('user', None)

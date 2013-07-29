@@ -53,10 +53,7 @@ class Role(AbstractPagePermission):
 
     def __init__(self, *args, **kwargs):
         super(Role, self).__init__(*args, **kwargs)
-        if self.group is not None:
-            self._old_group = self.group.id
-        else:
-            self._old_group = None
+        self._old_group = self.group_id
         self._old_is_site_wide = self.is_site_wide
 
     def clean(self):
@@ -86,7 +83,7 @@ class Role(AbstractPagePermission):
 
         if self.is_site_wide:
             group_changed = (self._old_group is not None and
-                             self._old_group != self.group.id)
+                             self._old_group != self.group_id)
             if group_changed:
                 self._update_site_groups_permissions()
 
@@ -153,7 +150,8 @@ class Role(AbstractPagePermission):
             user.groups.add(self.get_site_specific_group(site))
         else:
             try:
-                first_page = Page.objects.filter(site=site).order_by('lft')[:1][0]
+                first_page = Page.objects.filter(site=site)\
+                    .order_by('tree_id', 'lft')[:1][0]
             except IndexError:
                 raise ValidationError(
                     'Site needs to have at least one page '
