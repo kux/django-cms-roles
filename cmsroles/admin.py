@@ -15,11 +15,11 @@ class RoleForm(ModelForm):
 
     class Meta:
         model = Role
-        fields = tuple(['name', 'group'] + get_permission_fields())
+        fields = tuple(['name', 'group', 'is_site_wide'] + get_permission_fields())
 
 
 class RoleAdmin(admin.ModelAdmin):
-    list_display = ['name', 'group'] + get_permission_fields()
+    list_display = ['name', 'group', 'is_site_wide'] + get_permission_fields()
     form = RoleForm
 
     def __init__(self, *args, **kwargs):

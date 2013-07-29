@@ -18,7 +18,7 @@ INSTALLED_APPS = [
 ]
 
 TEST_RUNNER = 'django_nose.NoseTestSuiteRunner'
-CMS_TEMPLATES = []
+CMS_TEMPLATES = [('template.html', 'template.html')]
 CMS_MODERATOR = True
 CMS_PERMISSION = True
 STATIC_ROOT = '/static/'
@@ -55,9 +55,7 @@ MIDDLEWARE_CLASSES = (
     'django.contrib.messages.middleware.MessageMiddleware',
 )
 TEMPLATE_LOADERS = (
-    'django.template.loaders.filesystem.Loader',
-    'django.template.loaders.app_directories.Loader',
-    'django.template.loaders.eggs.Loader',
+    'cmsroles.test_utils.MockLoader',
     )
 CACHE_BACKEND = 'locmem:///'
 

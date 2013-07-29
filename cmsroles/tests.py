@@ -3,7 +3,8 @@ from django.contrib.auth.models import User, Group, Permission
 from django.contrib.sites.models import Site
 from django.core.exceptions import ValidationError
 
-from cms.models.permissionmodels import GlobalPagePermission
+from cms.models.permissionmodels import GlobalPagePermission, PagePermission
+from cms.api import create_page
 
 from cmsroles.models import Role
 from cmsroles.siteadmin import is_site_admin, get_administered_sites, get_site_users
@@ -16,7 +17,7 @@ class BasicSiteSetupTest(TestCase):
             username='root', password='root',
             email='root@roto.com')
 
-    def _create_site_adimin_group(self):
+    def _create_site_admin_group(self):
         site_admin_group = Group.objects.create(name='site_admin')
         site_admin_perms = Permission.objects.filter(content_type__model='user')
         for perm in site_admin_perms:
@@ -32,12 +33,18 @@ class BasicSiteSetupTest(TestCase):
         """
         foo_site = Site.objects.create(name='foo.site.com', domain='foo.site.com')
         bar_site = Site.objects.create(name='bar.site.com', domain='bar.site.com')
-        base_site_admin_group = self._create_site_adimin_group()
-        admin_role = Role.objects.create(name='site admin', group=base_site_admin_group)
+        base_site_admin_group = self._create_site_admin_group()
+        admin_role = Role.objects.create(
+            name='site admin', group=base_site_admin_group,
+            is_site_wide=True)
         base_editor_group = Group.objects.create(name='editor')
-        editor_role = Role.objects.create(name='editor', group=base_editor_group)
+        editor_role = Role.objects.create(
+            name='editor', group=base_editor_group,
+            is_site_wide=True)
         base_developer_group = Group.objects.create(name='developer')
-        developer_role = Role.objects.create(name='developer', group=base_developer_group)
+        developer_role = Role.objects.create(
+            name='developer', group=base_developer_group,
+            is_site_wide=True)
         joe = User.objects.create(username='joe', is_staff=True)
         joe.groups.add(admin_role.get_site_specific_group(foo_site))
         joe.groups.add(admin_role.get_site_specific_group(bar_site))
@@ -52,6 +59,18 @@ class BasicSiteSetupTest(TestCase):
         criss.groups.add(editor_role.get_site_specific_group(bar_site))
         vasile = User.objects.create(username='vasile', is_staff=True)
         vasile.groups.add(editor_role.get_site_specific_group(bar_site))
+
+
+    def _create_non_site_wide_role(self):
+        writer_group = Group.objects.create(name='writer')
+        writer_role = Role.objects.create(
+            name='writer', group=writer_group, is_site_wide=False,
+            can_add=False)
+        foo_site = Site.objects.create(name='foo.site.com', domain='foo.site.com')
+        user = User.objects.create(username='gigi', is_staff=True)
+        create_page('master', 'template.html', language='en', site=foo_site)
+        writer_role.grant_to_user(user, foo_site)
+        return writer_role, user, foo_site
 
     def test_is_admin(self):
         self._create_simple_setup()
@@ -105,8 +124,10 @@ class BasicSiteSetupTest(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_global_page_permission_implicitly_created(self):
-        site_admin_group = self._create_site_adimin_group()
-        site_admin = Role.objects.create(name='site admin', group=site_admin_group)
+        site_admin_group = self._create_site_admin_group()
+        site_admin = Role.objects.create(
+            name='site admin', group=site_admin_group,
+            is_site_wide=True)
         global_page_perms = GlobalPagePermission.objects.all()
         # a global page permissions obj implicitly got created on role creation
         # for the default example.com site
@@ -123,9 +144,28 @@ class BasicSiteSetupTest(TestCase):
             self.assertEqual(set(site_specific_group.permissions.all()),
                              set(site_admin_group.permissions.all()))
 
+    def test_assign_user_to_non_site_wide_role(self):
+        writer_role, user, foo_site = self._create_non_site_wide_role()
+        page_perms = PagePermission.objects.filter(user=user)
+        self.assertEqual(len(page_perms), 1)
+        users = writer_role.users(foo_site)
+        self.assertItemsEqual([u.pk for u in users], [user.pk])
+
+    def test_switch_role_form_site_wide_to_non_wide(self):
+        writer_role, user, foo_site = self._create_non_site_wide_role()
+        writer_role.is_site_wide = True
+        writer_role.save()
+        self.assertFalse(writer_role.derived_page_permissions.exists())
+        self.assertTrue(writer_role.derived_global_permissions.exists())
+        users = writer_role.users(foo_site)
+        self.assertItemsEqual([u.pk for u in users], [user.pk])
+        self.assertTrue(writer_role.derived_global_permissions.filter(group__user=user).exists())
+
     def test_cant_create_two_roles_based_on_the_same_group(self):
-        site_admin_group = self._create_site_adimin_group()
-        Role.objects.create(name='site admin', group=site_admin_group)
+        site_admin_group = self._create_site_admin_group()
+        Role.objects.create(
+            name='site admin', group=site_admin_group,
+            is_site_wide=True)
         with self.assertRaises(ValidationError):
             role = Role(name='site admin', group=site_admin_group)
             role.full_clean()
@@ -153,9 +193,10 @@ class BasicSiteSetupTest(TestCase):
 
     def _setup_site_deletion(self, site_name):
         site = Site.objects.create(name=site_name, domain=site_name)
-        base_site_admin_group = self._create_site_adimin_group()
+        base_site_admin_group = self._create_site_admin_group()
         admin_role = Role.objects.create(
-            name='site admin', group=base_site_admin_group)
+            name='site admin', group=base_site_admin_group,
+            is_site_wide=True)
         return site, admin_role
 
     def test_site_deletion_no_roles(self):
@@ -185,8 +226,9 @@ class BasicSiteSetupTest(TestCase):
     def test_generated_group_names(self):
         foo_site = Site.objects.create(name='foo.site.com', domain='foo.site.com')
         bar_site = Site.objects.create(name='bar.site.com', domain='bar.site.com')
-        base_site_admin_group = self._create_site_adimin_group()
-        admin_role = Role.objects.create(name='site admin', group=base_site_admin_group)
+        base_site_admin_group = self._create_site_admin_group()
+        admin_role = Role.objects.create(name='site admin', group=base_site_admin_group,
+                                         is_site_wide=True)
         generated_group = admin_role.get_site_specific_group(foo_site)
         self.assertEqual(generated_group.name, Role.group_name_pattern.format(
             site_id=foo_site.pk, group_id=base_site_admin_group.pk))
@@ -225,6 +267,16 @@ class BasicSiteSetupTest(TestCase):
         for gp in developer_role.derived_global_permissions.all():
             self.assertEqual(gp.can_add, developer_role.can_add)
 
+    def test_changes_in_role_relected_in_page_perms(self):
+        writer_role, _, _ = self._create_non_site_wide_role()
+        self.assertEqual(writer_role.derived_page_permissions.count(), 1)
+        for page_perm in writer_role.derived_page_permissions.all():
+            self.assertFalse(page_perm.can_add)
+        writer_role.can_add = True
+        writer_role.save()
+        for page_perm in writer_role.derived_page_permissions.all():
+            self.assertTrue(page_perm.can_add)
+
     def test_changes_in_base_group_reflected_in_generated_ones(self):
 
         def check_permissions(role, permission_set):
@@ -253,7 +305,7 @@ class BasicSiteSetupTest(TestCase):
 
     def test_role_validation_two_roles_same_group(self):
         Site.objects.create(name='foo.site.com', domain='foo.site.com')
-        base_site_admin_group = self._create_site_adimin_group()
+        base_site_admin_group = self._create_site_admin_group()
         Role.objects.create(name='site admin 1', group=base_site_admin_group)
         role_from_same_group = Role(name='site admin 2', group=base_site_admin_group)
         with self.assertRaises(ValidationError):
@@ -261,8 +313,9 @@ class BasicSiteSetupTest(TestCase):
 
     def test_role_validation_role_from_derived_group(self):
         Site.objects.create(name='foo.site.com', domain='foo.site.com')
-        base_site_admin_group = self._create_site_adimin_group()
-        role = Role.objects.create(name='site admin 1', group=base_site_admin_group)
+        base_site_admin_group = self._create_site_admin_group()
+        role = Role.objects.create(name='site admin 1', group=base_site_admin_group,
+                                   is_site_wide=True)
         # there should be at least one derived group for
         # the foo.site.com created above
         derived_group = role.derived_global_permissions.all()[0].group
@@ -294,12 +347,15 @@ class BasicSiteSetupTest(TestCase):
                 # change joe to a developer
                 u'form-0-user': [unicode(joe.pk)],
                 u'form-0-role': [unicode(developer.pk)],
+                u'form-0-site': [unicode(foo_site.pk)],
                 # george to an editor
                 u'form-1-user': [unicode(george.pk)],
                 u'form-1-role': [unicode(editor.pk)],
+                u'form-1-site': [unicode(foo_site.pk)],
                 # robin stays the same
                 u'form-2-user': [unicode(robin.pk)],
                 u'form-2-role': [unicode(editor.pk)],
+                u'form-2-site': [unicode(foo_site.pk)],
                 u'next': [u'continue']}
                 )
         self.assertEqual(response.status_code, 302)
@@ -324,9 +380,11 @@ class BasicSiteSetupTest(TestCase):
                 # joe remains an admin
                 u'form-0-user': [unicode(joe.pk)],
                 u'form-0-role': [unicode(admin.pk)],
+                u'form-0-site': [unicode(foo_site.pk)],
                 # george remains a developer
                 u'form-1-user': [unicode(george.pk)],
                 u'form-1-role': [unicode(developer.pk)],
+                u'form-1-site': [unicode(foo_site.pk)],
                 # but robin gets removed !!
                 u'next': [u'continue']}
                 )
@@ -352,15 +410,19 @@ class BasicSiteSetupTest(TestCase):
                 # joe remains an admin
                 u'form-0-user': [unicode(joe.pk)],
                 u'form-0-role': [unicode(admin.pk)],
+                u'form-0-site': [unicode(foo_site.pk)],
                 # george remains a developer
                 u'form-1-user': [unicode(george.pk)],
                 u'form-1-role': [unicode(developer.pk)],
+                u'form-1-site': [unicode(foo_site.pk)],
                 # robin remains an editor
                 u'form-2-user': [unicode(robin.pk)],
                 u'form-2-role': [unicode(editor.pk)],
+                u'form-2-site': [unicode(foo_site.pk)],
                 # but we also add criss to foo_site
                 u'form-3-user': [unicode(criss.pk)],
                 u'form-3-role': [unicode(admin.pk)],
+                u'form-3-site': [unicode(foo_site.pk)],
                 u'next': [u'continue']}
                 )
         self.assertEqual(response.status_code, 302)

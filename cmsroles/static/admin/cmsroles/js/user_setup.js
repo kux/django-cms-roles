@@ -2,9 +2,18 @@ django.jQuery(document).ready(function(){
 
     var $ = django.jQuery;
 
+    var current_site = $("#site_selector [selected='selected']").val()
+
+    function set_hidden_site_values(){
+        $('input[name*="site"]').val(current_site)
+    };
+
+    set_hidden_site_values();
+
     $('.user_settings').formset({
         addText: 'Assign another user to this site',
-        deleteText: ''
+        deleteText: '',
+        added: set_hidden_site_values,
     });
 
     $('#site_selector').change(function(){
