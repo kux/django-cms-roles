@@ -176,7 +176,7 @@ class Role(AbstractPagePermission):
         if self.is_site_wide:
             user.groups.remove(self.get_site_specific_group(site))
         else:
-            for perm in  PagePermission.objects.filter(page__site=site, user=user):
+            for perm in self.derived_page_permissions.filter(page__site=site, user=user):
                 perm.delete()
             user.groups.remove(self.group)
 

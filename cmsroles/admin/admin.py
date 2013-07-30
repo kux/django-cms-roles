@@ -49,7 +49,7 @@ class UserSetupAdmin(admin.ModelAdmin):
     class Meta:
         model = UserSetup
 
-    def has_add_permission(self, request, obj=None):
+    def has_add_permission(self, request):
         return False
 
     def has_change_permission(self, request, obj=None):
@@ -57,6 +57,7 @@ class UserSetupAdmin(admin.ModelAdmin):
         #   have at least one site under their control
         user = request.user
         return is_site_admin(user) and len(get_administered_sites(user)) > 0
+
 
 admin.site.register(Role, RoleAdmin)
 admin.site.register(UserSetup, UserSetupAdmin)
