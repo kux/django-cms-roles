@@ -33,6 +33,7 @@ class Role(AbstractPagePermission):
         app_label = 'cmsroles'
         verbose_name = _('role')
         verbose_name_plural = _('roles')
+        permissions = (('user_setup', 'Can access user setup'),)
 
     group_name_pattern = 'cmsroles-generated-{site_id}-{group_id}'
 

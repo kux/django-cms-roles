@@ -7,7 +7,8 @@ from cms.models.permissionmodels import GlobalPagePermission, PagePermission
 from cms.api import create_page
 
 from cmsroles.models import Role
-from cmsroles.siteadmin import is_site_admin, get_administered_sites, get_site_users
+from cmsroles.siteadmin import (is_site_admin, get_administered_sites, get_site_users,
+                                get_site_admin_required_permission)
 
 
 class BasicSiteSetupTest(TestCase):
@@ -15,13 +16,11 @@ class BasicSiteSetupTest(TestCase):
     def setUp(self):
         User.objects.create_superuser(
             username='root', password='root',
-            email='root@roto.com')
+            email='root@roto.com')       
 
     def _create_site_admin_group(self):
         site_admin_group = Group.objects.create(name='site_admin')
-        site_admin_perms = Permission.objects.filter(content_type__model='user')
-        for perm in site_admin_perms:
-            site_admin_group.permissions.add(perm)
+        site_admin_group.permissions.add(get_site_admin_required_permission())
         return site_admin_group
 
     def _create_simple_setup(self):
@@ -121,9 +120,7 @@ class BasicSiteSetupTest(TestCase):
         joe = User.objects.create_user(
             username='joe', password='x', email='joe@mata.com')
         joe.is_staff = True
-        site_admin_perms = Permission.objects.filter(content_type__model='user')
-        for perm in site_admin_perms:
-            joe.user_permissions.add(perm)
+        joe.user_permissions.add(get_site_admin_required_permission())
         joe.save()
         self.client.login(username='joe', password='x')
         response = self.client.get('/admin/cmsroles/usersetup/')
