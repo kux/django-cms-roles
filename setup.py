@@ -13,8 +13,8 @@ setup(
     url='https://github.com/kux/django-cms-roles',
     install_requires=(
         'parse',
-        'Django>=1.3,<1.5',
-        'django-cms>=2.3,<2.4'),
+        'Django>=1.3,<1.5',),
+        # 'django-cms>=2.3,<2.4'),
     setup_requires=[
         's3sourceuploader',
     ],
