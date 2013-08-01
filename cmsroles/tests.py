@@ -45,6 +45,10 @@ class BasicSiteSetupTest(TestCase):
         developer_role = Role.objects.create(
             name='developer', group=base_developer_group,
             is_site_wide=True)
+        base_writer_group = Group.objects.create(name='writer')
+        writer_role = Role.objects.create(
+            name='writer', group=base_writer_group,
+            is_site_wide=False)
         joe = User.objects.create(username='joe', is_staff=True)
         joe.groups.add(admin_role.get_site_specific_group(foo_site))
         joe.groups.add(admin_role.get_site_specific_group(bar_site))
@@ -59,7 +63,9 @@ class BasicSiteSetupTest(TestCase):
         criss.groups.add(editor_role.get_site_specific_group(bar_site))
         vasile = User.objects.create(username='vasile', is_staff=True)
         vasile.groups.add(editor_role.get_site_specific_group(bar_site))
-
+        bob = User.objects.create(username='bob', is_staff=True)
+        create_page('master', 'template.html', language='en', site=bar_site)
+        writer_role.grant_to_user(bob, bar_site)
 
     def _create_non_site_wide_role(self):
         writer_group = Group.objects.create(name='writer')

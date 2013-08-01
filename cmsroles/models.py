@@ -57,12 +57,15 @@ class Role(AbstractPagePermission):
         self._old_is_site_wide = self.is_site_wide
 
     def clean(self):
-        filter_clause = Q(group=self.group) | Q(derived_global_permissions__group=self.group)
-        query = Role.objects.filter(filter_clause)
-        if self.pk:
-            query = query.exclude(pk=self.pk)
-        if query.exists():
-            raise ValidationError(u'A Role for group "%s" already exists' % self.group.name)
+        if self.group is not None:
+            filter_clause = Q(group=self.group) | (
+                Q(derived_global_permissions__group=self.group) &
+                Q(is_site_wide=True))
+            query = Role.objects.filter(filter_clause)
+            if self.pk:
+                query = query.exclude(pk=self.pk)
+            if query.exists():
+                raise ValidationError(u'A Role for group "%s" already exists' % self.group.name)
 
     def _update_site_groups_permissions(self):
         new_group_permissions = self.group.permissions.all()
