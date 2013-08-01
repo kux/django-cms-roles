@@ -10,6 +10,7 @@
   {% load adminmedia %}
   {{ block.super }}
   <link rel="stylesheet" type="text/css" href="{% admin_media_prefix %}cmsroles/css/user_setup.css"/>
+  <link rel="stylesheet" type="text/css" href="{% admin_media_prefix %}cmsroles/css/chosen.css"/>
 {% endblock %}
 
 {% block breadcrumbs %}
@@ -66,6 +67,7 @@
 <script type="text/javascript" src="{% admin_media_prefix %}js/admin/RelatedObjectLookups.js"></script>
 <script type="text/javascript" src="{% admin_media_prefix %}js/jquery.js"></script>
 <script type="text/javascript" src="{% admin_media_prefix %}js/jquery.init.js"></script>
+<script type="text/javascript" src="{% admin_media_prefix %}cmsroles/js/chosen.jquery.js"></script>
 <script type="text/javascript" src="{% admin_media_prefix %}cmsroles/js/jquery.formset.js"></script>
 <script type="text/javascript" src="{% admin_media_prefix %}cmsroles/js/user_setup.js"></script>
 {% endblock %}
