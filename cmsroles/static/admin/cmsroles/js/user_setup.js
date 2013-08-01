@@ -41,4 +41,17 @@ django.jQuery(document).ready(function(){
         search_contains: true
     });
 
+    $('#search_box').keyup(function(){
+        var search_word = $(this).val();
+        $.each( $('.user_settings'), function(i, val){
+            var self = $(this);
+            var user = $('span', self).first().html();
+            if (user.indexOf(search_word) === -1){
+                self.hide();
+            } else {
+                self.show();
+            }
+        });
+    });
+
 });
