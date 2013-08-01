@@ -7,7 +7,8 @@ from cms.models.permissionmodels import GlobalPagePermission, PagePermission
 from cms.api import create_page
 
 from cmsroles.models import Role
-from cmsroles.siteadmin import is_site_admin, get_administered_sites, get_site_users
+from cmsroles.siteadmin import (is_site_admin, get_administered_sites, get_site_users,
+                                get_site_admin_required_permission)
 
 
 class BasicSiteSetupTest(TestCase):
@@ -15,13 +16,11 @@ class BasicSiteSetupTest(TestCase):
     def setUp(self):
         User.objects.create_superuser(
             username='root', password='root',
-            email='root@roto.com')
+            email='root@roto.com')       
 
     def _create_site_admin_group(self):
         site_admin_group = Group.objects.create(name='site_admin')
-        site_admin_perms = Permission.objects.filter(content_type__model='user')
-        for perm in site_admin_perms:
-            site_admin_group.permissions.add(perm)
+        site_admin_group.permissions.add(get_site_admin_required_permission())
         return site_admin_group
 
     def _create_simple_setup(self):
@@ -50,19 +49,19 @@ class BasicSiteSetupTest(TestCase):
             name='writer', group=base_writer_group,
             is_site_wide=False)
         joe = User.objects.create(username='joe', is_staff=True)
-        joe.groups.add(admin_role.get_site_specific_group(foo_site))
-        joe.groups.add(admin_role.get_site_specific_group(bar_site))
+        admin_role.grant_to_user(joe, foo_site)
+        admin_role.grant_to_user(joe, bar_site)
         george = User.objects.create(username='george', is_staff=True)
-        george.groups.add(developer_role.get_site_specific_group(foo_site))
+        developer_role.grant_to_user(george, foo_site)
         robin = User.objects.create(username='robin', is_staff=True)
-        robin.groups.add(editor_role.get_site_specific_group(foo_site))
-        robin.groups.add(developer_role.get_site_specific_group(bar_site))
+        editor_role.grant_to_user(robin, foo_site)
+        developer_role.grant_to_user(robin, bar_site)
         jack = User.objects.create(username='jack', is_staff=True)
-        jack.groups.add(admin_role.get_site_specific_group(bar_site))
+        admin_role.grant_to_user(jack, bar_site)
         criss = User.objects.create(username='criss', is_staff=True)
-        criss.groups.add(editor_role.get_site_specific_group(bar_site))
+        editor_role.grant_to_user(criss, bar_site)
         vasile = User.objects.create(username='vasile', is_staff=True)
-        vasile.groups.add(editor_role.get_site_specific_group(bar_site))
+        editor_role.grant_to_user(vasile, bar_site)
         bob = User.objects.create(username='bob', is_staff=True)
         create_page('master', 'template.html', language='en', site=bar_site)
         writer_role.grant_to_user(bob, bar_site)
@@ -121,9 +120,7 @@ class BasicSiteSetupTest(TestCase):
         joe = User.objects.create_user(
             username='joe', password='x', email='joe@mata.com')
         joe.is_staff = True
-        site_admin_perms = Permission.objects.filter(content_type__model='user')
-        for perm in site_admin_perms:
-            joe.user_permissions.add(perm)
+        joe.user_permissions.add(get_site_admin_required_permission())
         joe.save()
         self.client.login(username='joe', password='x')
         response = self.client.get('/admin/cmsroles/usersetup/')

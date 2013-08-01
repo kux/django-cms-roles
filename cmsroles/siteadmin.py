@@ -1,7 +1,11 @@
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Permission
 from django.contrib.sites.models import Site
 
 from cmsroles.models import Role
+
+
+def get_site_admin_required_permission():
+    return Permission.objects.get(content_type__model='role', codename='user_setup')
 
 
 def is_site_admin(user):
@@ -10,16 +14,17 @@ def is_site_admin(user):
     """
     if user.is_superuser:
         return True
-    return user.is_staff and 'auth.change_user' in user.get_all_permissions()
+    req_perm_obj = get_site_admin_required_permission()
+    req_perm = '%s.%s' % (req_perm_obj.content_type.app_label,
+                          req_perm_obj.codename)
+    return user.is_staff and req_perm in user.get_all_permissions()
 
 
 def is_site_admin_group(group):
     """Returns whether group gives site admin rights to the users
     that belong to it.
     """
-    permissions = set([(p.codename, p.content_type.model_class())
-                       for p in group.permissions.all()])
-    return (u'change_user', User) in permissions
+    return get_site_admin_required_permission() in group.permissions.all()
 
 
 def get_administered_sites(user):
