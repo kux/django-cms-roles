@@ -173,6 +173,10 @@ class Role(AbstractPagePermission):
                 self.derived_page_permissions.add(page_permission)
                 user.groups.add(self.group)
 
+        if not user.is_staff:
+            user.is_staff = True
+            user.save()
+
     def ungrant_from_user(self, user, site):
         """Remove the given user from this role from the given site"""
         # TODO: Extract some 'state' class that implements the is/isn't site wide
