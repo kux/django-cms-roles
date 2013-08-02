@@ -2,6 +2,14 @@
     margin-top: 20px;
 }
 
+#user_search{
+    padding-top: 5px;
+}
+
+#search_box{
+    width: 570px;
+}
+
 #site_selection p{
     padding-top: 6px;
 }
@@ -13,7 +21,7 @@
 }
 
 #content select{
-    width: 280px;
+    width: 580px;
 }
 
 #add_user_section{

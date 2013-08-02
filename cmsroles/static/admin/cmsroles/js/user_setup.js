@@ -13,7 +13,10 @@ django.jQuery(document).ready(function(){
     $('.user_settings').formset({
         addText: 'Assign another user to this site',
         deleteText: '',
-        added: set_hidden_site_values,
+        added: function(row){
+            set_hidden_site_values();
+            $('select', row).chosen({search_contains: true});
+        },
     });
 
     $('#site_selector').change(function(){
@@ -32,6 +35,23 @@ django.jQuery(document).ready(function(){
 
     $('#save_and_continue').click(function(){
         submit_userformset('continue');
+    });
+
+    $('select').chosen({
+        search_contains: true
+    });
+
+    $('#search_box').keyup(function(){
+        var search_word = $(this).val();
+        $.each( $('.user_settings'), function(i, val){
+            var self = $(this);
+            var user = $('span', self).first().html();
+            if (user.indexOf(search_word) === -1){
+                self.hide();
+            } else {
+                self.show();
+            }
+        });
     });
 
 });

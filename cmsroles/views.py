@@ -8,6 +8,7 @@ from django.forms.formsets import formset_factory, BaseFormSet
 from django.http import HttpResponseRedirect
 from django.shortcuts import render_to_response
 from django.template import RequestContext
+from django.utils.encoding import smart_unicode
 
 from cms.models.pagemodel import Page
 
@@ -16,9 +17,20 @@ from cmsroles.siteadmin import get_administered_sites, \
 from cmsroles.models import Role
 
 
+class UserChoiceField(forms.ModelChoiceField):
+
+    def label_from_instance(self, obj):
+        if obj.first_name and obj.last_name and obj.email:
+            return u'%s %s (%s)' % (obj.first_name, obj.last_name, obj.email)
+        elif obj.email:
+            return obj.email
+        else:
+            return smart_unicode(obj)
+
+
 class UserForm(forms.Form):
-    user = forms.ModelChoiceField(
-        queryset=User.objects.filter(is_staff=True),
+    user = UserChoiceField(
+        queryset=User.objects.filter(is_active=True),
         required=False)
     role = forms.ModelChoiceField(
         queryset=Role.objects.all(),

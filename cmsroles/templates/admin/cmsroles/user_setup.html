@@ -10,6 +10,7 @@
   {% load adminmedia %}
   {{ block.super }}
   <link rel="stylesheet" type="text/css" href="{% admin_media_prefix %}cmsroles/css/user_setup.css"/>
+  <link rel="stylesheet" type="text/css" href="{% admin_media_prefix %}cmsroles/css/chosen.css"/>
 {% endblock %}
 
 {% block breadcrumbs %}
@@ -39,6 +40,14 @@
 </p>
 </div>
 
+<div class="module aligned" id="user_search">
+<p>
+  <label for="search_box"><strong>Search user: </strong></label>
+  <input id="search_box" name="search_box" type="text"/>
+</p>
+</div>
+
+
 <div class="module aligned">
   <form id="user_formset" method="post" action="" style="
     {% if user_formset|length == 0 %}
@@ -66,6 +75,7 @@
 <script type="text/javascript" src="{% admin_media_prefix %}js/admin/RelatedObjectLookups.js"></script>
 <script type="text/javascript" src="{% admin_media_prefix %}js/jquery.js"></script>
 <script type="text/javascript" src="{% admin_media_prefix %}js/jquery.init.js"></script>
+<script type="text/javascript" src="{% admin_media_prefix %}cmsroles/js/chosen.jquery.js"></script>
 <script type="text/javascript" src="{% admin_media_prefix %}cmsroles/js/jquery.formset.js"></script>
 <script type="text/javascript" src="{% admin_media_prefix %}cmsroles/js/user_setup.js"></script>
 {% endblock %}
