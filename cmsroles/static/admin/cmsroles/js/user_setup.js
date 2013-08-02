@@ -41,7 +41,7 @@ django.jQuery(document).ready(function(){
         search_contains: true
     });
 
-    $('#search_box').keyup(function(){
+    $('#search_box').bind('keyup input', function(){
         var search_word = $(this).val();
         $.each( $('.user_settings'), function(i, val){
             var self = $(this);
