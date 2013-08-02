@@ -43,9 +43,11 @@ django.jQuery(document).ready(function(){
 
     $('#search_box').bind('keyup input', function(){
         var search_word = $(this).val();
+        search_word = search_word.toLowerCase();
         $.each( $('.user_settings'), function(i, val){
             var self = $(this);
             var user = $('span', self).first().html();
+            user = user.toLowerCase();
             if (user.indexOf(search_word) === -1){
                 self.hide();
             } else {
