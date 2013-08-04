@@ -191,18 +191,20 @@ class Role(AbstractPagePermission):
     def all_users(self):
         """Returns all users having this role."""
         if self.is_site_wide:
-            return User.objects.filter(groups__globalpagepermission__role=self)
+            qs = User.objects.filter(groups__globalpagepermission__role=self)
         else:
-            return User.objects.filter(groups=self.group)
+            qs = User.objects.filter(groups=self.group)
+        return qs.distinct()
 
     def users(self, site):
         """Returnes all users having this role in the given site."""
         if self.is_site_wide:
-            gp = self.derived_global_permissions.filter(sites=site)
-            return User.objects.filter(groups__globalpagepermission=gp)
+            global_page_perm = self.derived_global_permissions.filter(sites=site)
+            qs = User.objects.filter(groups__globalpagepermission=global_page_perm)
         else:
-            return User.objects.filter(
+            qs = User.objects.filter(
                 pagepermission__page__site=site, groups=self.group)
+        return qs.distinct()
 
     def get_site_specific_group(self, site):
         # TODO: enforce there is one global page perm per site
