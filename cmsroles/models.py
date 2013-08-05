@@ -160,7 +160,7 @@ class Role(AbstractPagePermission):
         else:
             try:
                 first_page = Page.objects.filter(site=site)\
-                    .order_by('tree_id', 'lft')[:1][0]
+                    .order_by('tree_id', 'lft')[0]
             except IndexError:
                 raise ValidationError(
                     'Site needs to have at least one page '
