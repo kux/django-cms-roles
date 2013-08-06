@@ -30,8 +30,7 @@ groups in sync would be quite painful and error prone.
 
 Roles
 -----
-This app provides a new ```Role``` class that is built on top of the cms'
-```AbstractPagePermission```.
+This app provides a new ```Role``` class that is built on top of the cms ```AbstractPagePermission```
 
 A Role references a django group and adds cms specific permissions on top of it.
 
