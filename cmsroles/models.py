@@ -21,8 +21,19 @@ def get_permission_fields():
 
 class Role(AbstractPagePermission):
     """
-    When is_site_wide is True this role uses derived_global_permissions
-    When is_site_wide is False this role uses derived_page_permissions
+    A Role references a django group and adds cms specific permissions on top of it.
+
+    A Role object can function in two modes:
+    * site wide (is_site_wide = True)
+    * on a page by page basis (is_site_wide = False)
+
+    Being site wide means that users assigned to this Role on a particular site
+    are able to access all of that site's pages.
+    Otherwise, for roles functioning on a page by page basis you will need to
+    explicitly specify the pages you will grant access on.
+
+    When is_site_wide is True the role will maintain derived_global_permissions
+    When is_site_wide is False this role will maintain derived_page_permissions
 
     The class invariant is that one of derived_global_permissions and
     derived_page_permissions must be empty at all times
@@ -159,6 +170,11 @@ class Role(AbstractPagePermission):
             user.groups.add(self.get_site_specific_group(site))
         else:
             try:
+                # this is a workaround for the fact that
+                # the interface doesn't yet support the selection of
+                # pages when working in a 'page by page' mode
+                # as a workaround, a page permission is granted on
+                # the site's first page
                 first_page = Page.objects.filter(site=site)\
                     .order_by('tree_id', 'lft')[0]
             except IndexError:
@@ -180,7 +196,7 @@ class Role(AbstractPagePermission):
     def ungrant_from_user(self, user, site):
         """Remove the given user from this role from the given site"""
         # TODO: Extract some 'state' class that implements the is/isn't site wide
-        #       different strategies
+        #       differences
         if self.is_site_wide:
             user.groups.remove(self.get_site_specific_group(site))
         else:
