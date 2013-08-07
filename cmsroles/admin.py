@@ -29,7 +29,8 @@ class RoleAdmin(admin.ModelAdmin):
 
     def get_actions(self, request):
         """Overriden get_actions so we don't allow bulk deletions.
-        Bulk deletions would leave orphaned auto-generated groups.
+        Bulk deletions would leave orphaned auto-generated groups due
+        to Role.delete not getting called
         """
         actions = super(RoleAdmin, self).get_actions(request)
         actions.pop('delete_selected', None)

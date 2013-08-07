@@ -38,6 +38,12 @@ On User Setup page you can assign users to different roles within different site
 In this [example](https://github.com/kux/django-cms-roles/blob/master/User_Setup.png)
 user 'Foo Bar' is given the 'writer' role on 'test.site.com'.
 
+A role can function in two modes:
+* site wide (is_site_wide = True)
+* on a page by page basis (is_site_wide = False)
+
+Site wide roles
+---------------
 Under the hood a Role object maintains a list of auto generated global page permissions
 and django groups. The number of auto generated global page permissions and django groups
 is equal to the ```number of roles * number of sites```. These auto generated groups and
@@ -57,3 +63,15 @@ that:
 * when a django group referenced by a Role is updated all of the auto generated django groups
   are also updated
 
+
+Page by page roles
+------------------
+When giving an user a role you will also need to specify the pages on which that role applies.
+This is the equivalent of creating PagePermission objects by using the cms' 'Change Page' view.
+
+When functioning in this mode, no global page permissions or django groups need to be auto generated.
+However, the role will maintain a list of ```PagePermission```s
+
+
+**Note**: For understanding the inner workings of django-cms-roles it would be worth to check the
+django-cms' permissions [documentation](http://django-cms.readthedocs.org/en/latest/advanced/permissions_reference.html)

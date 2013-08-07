@@ -10,7 +10,7 @@ def get_site_admin_required_permission():
 
 def is_site_admin(user):
     """Returns whether user is a site admin. A user is a site admin
-    if he has add/change/delete permissions over django.contrib.auth.models.User
+    if he is a super user or has the 'has access to user setup' permission.
     """
     if user.is_superuser:
         return True
