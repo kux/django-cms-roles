@@ -436,3 +436,19 @@ class BasicSiteSetupTest(TestCase):
         self.assertEqual(user_pks_to_role_pks[george.pk], developer.pk)
         self.assertEqual(user_pks_to_role_pks[robin.pk], editor.pk)
         self.assertEqual(user_pks_to_role_pks[criss.pk], admin.pk)
+
+    def test_no_duplicate_groups_in_the_group_admin(self):
+        site_admin_group = self._create_site_admin_group()
+        Role.objects.create(
+            name='site admin', group=site_admin_group,
+            is_site_wide=True)
+        GlobalPagePermission.objects.create(
+            group=site_admin_group)
+        GlobalPagePermission.objects.create(
+            group=site_admin_group)
+        self.client.login(username='root', password='root')
+        response = self.client.get('/admin/auth/group/')
+        displayed_objects = response.context['cl'].result_list
+        # before 'distinct()' was added, ExtendedGroupAdmin.get_filtered_queryset
+        # used to return the same group object multiple times
+        self.assertListEqual(list(displayed_objects), [site_admin_group])

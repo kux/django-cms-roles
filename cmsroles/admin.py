@@ -73,12 +73,14 @@ def _get_registered_modeladmin(model):
 class ExtendedGroupAdmin(_get_registered_modeladmin(Group)):
 
     @classmethod
-    def get_group_queryset(cls):
-        return Q(globalpagepermission__role__isnull=True)
+    def get_filtered_queryset(cls, qs=None):
+        if qs is None:
+            qs = Group.objects.all()
+        return qs.filter(globalpagepermission__role__isnull=True).distinct()
 
     def queryset(self, request):
-        qs = super(ExtendedGroupAdmin, self).queryset(request)
-        return qs.filter(ExtendedGroupAdmin.get_group_queryset())
+        return self.get_filtered_queryset(
+            super(ExtendedGroupAdmin, self).queryset(request))
 
 
 admin.site.unregister(Group)
@@ -93,8 +95,7 @@ class ExtendedGlobalPagePermssionAdmin(_get_registered_modeladmin(GlobalPagePerm
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.rel.to == Group:
-            kwargs["queryset"] = Group.objects.filter(
-                ExtendedGroupAdmin.get_group_queryset())
+            kwargs["queryset"] = ExtendedGroupAdmin.get_filtered_queryset()
         return super(ExtendedGlobalPagePermssionAdmin, self).formfield_for_foreignkey(
             db_field, request, **kwargs)
 
@@ -107,8 +108,7 @@ class ExtendedUserAdmin(_get_registered_modeladmin(User)):
 
     def formfield_for_manytomany(self, db_field, request, **kwargs):
         if db_field.rel.to == Group:
-            kwargs["queryset"] = Group.objects.filter(
-                ExtendedGroupAdmin.get_group_queryset())
+            kwargs["queryset"] = ExtendedGroupAdmin.get_filtered_queryset()
         return super(ExtendedUserAdmin, self).formfield_for_manytomany(
             db_field, request, **kwargs)
 
@@ -121,8 +121,7 @@ class ExtendedPageUserAdmin(_get_registered_modeladmin(PageUser)):
 
     def formfield_for_manytomany(self, db_field, request, **kwargs):
         if db_field.rel.to == Group:
-            kwargs["queryset"] = Group.objects.filter(
-                ExtendedGroupAdmin.get_group_queryset())
+            kwargs["queryset"] = ExtendedGroupAdmin.get_filtered_queryset()
         return super(ExtendedPageUserAdmin, self).formfield_for_manytomany(
             db_field, request, **kwargs)
 
@@ -134,8 +133,8 @@ admin.site.register(PageUser, ExtendedPageUserAdmin)
 class ExtendedPageUserGroupAdmin(_get_registered_modeladmin(PageUserGroup)):
 
     def queryset(self, request):
-        qs = super(ExtendedPageUserGroupAdmin, self).queryset(request)
-        return qs.filter(ExtendedGroupAdmin.get_group_queryset())
+        qs = ExtendedGroupAdmin.get_filtered_queryset(
+            super(ExtendedPageUserGroupAdmin, self).queryset(request))
 
 
 admin.site.unregister(PageUserGroup)
