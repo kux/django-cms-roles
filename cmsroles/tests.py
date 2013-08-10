@@ -309,6 +309,19 @@ class ObjectInteractionsTests(TestCase, HelpersMixin):
         admin_role = Role.objects.get(name='site admin')
         check_permissions(admin_role, set(p.pk for p in perms))
 
+    def test_delete_group(self):
+        # we should have a site by default
+        self.assertEqual(Site.objects.count(), 1)
+        base_site_admin_group = self._create_site_admin_group()
+        Role.objects.create(name='site admin', group=base_site_admin_group,
+                                         is_site_wide=True)
+        # we have two groups: base_site_admin_group and an auto generated
+        # one for the default site
+        self.assertEqual(Group.objects.count(), 2)
+        base_site_admin_group.delete()
+        # the auto generated one should also be deleted
+        self.assertEqual(Group.objects.count(), 0)
+
 
 class RoleValidationtests(TestCase, HelpersMixin):
 

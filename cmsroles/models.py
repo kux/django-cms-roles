@@ -215,6 +215,21 @@ class Role(AbstractPagePermission):
         return self.derived_global_permissions.get(sites=site).group
 
 
+@receiver(signals.pre_delete, sender=Group)
+def delete_role(instance, **kwargs):
+    """When deleting a group that a role uses, also
+    delete that role.
+    """
+    try:
+        roles = Role.objects.filter(group=instance)
+        for role in roles:
+            role.delete()
+    except Role.DoesNotExist:
+        # we don't care about groups that don't have any roles
+        # built on top of them
+        pass
+
+
 @receiver(signals.post_save, sender=Site)
 def create_role_groups(instance, **kwargs):
     site = instance
