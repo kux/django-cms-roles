@@ -217,8 +217,11 @@ class Role(AbstractPagePermission):
 
 @receiver(signals.pre_delete, sender=Group)
 def delete_role(instance, **kwargs):
-    """When deleting a group that a role uses, also
-    delete that role.
+    """When group that a role uses gets deleted, that role also
+    and all of the auto generated page permissions and groups
+    also need to be deleted. Whithout this pre_delete signal the
+    role would be deleted, but the deletion would happen without going
+    through the role's delete method
     """
     try:
         roles = Role.objects.filter(group=instance)
