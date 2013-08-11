@@ -264,6 +264,9 @@ def delete_role_groups(instance, **kwargs):
 
 @receiver(signals.m2m_changed, sender=Group.permissions.through)
 def update_site_specific_groups(instance, **kwargs):
+    action = kwargs['action']
+    if not action.startswith('post_'):
+        return
     group = instance
     try:
         role = Role.objects.get(group=group)
