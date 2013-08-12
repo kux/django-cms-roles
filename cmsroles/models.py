@@ -223,14 +223,11 @@ def delete_role(instance, **kwargs):
     role would be deleted, but the deletion would happen without going
     through the role's delete method
     """
-    try:
-        roles = Role.objects.filter(group=instance)
-        for role in roles:
-            role.delete()
-    except Role.DoesNotExist:
-        # we don't care about groups that don't have any roles
-        # built on top of them
-        pass
+    for role in Role.objects.filter(group=instance):
+        # Role.objects.filter(group=instance) should
+        # return 0 or 1 roles objects, unless someone
+        # created role objects without going through .clean
+        role.delete()
 
 
 @receiver(signals.post_save, sender=Site)
