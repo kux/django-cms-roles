@@ -7,7 +7,8 @@ from django.utils.translation import ugettext_lazy as _
 
 from cms.models.permissionmodels import (
     AbstractPagePermission, GlobalPagePermission, PagePermission)
-from cms.models.pagemodel import Page
+from cms.models import ACCESS_PAGE_AND_DESCENDANTS
+
 from parse import parse
 
 
@@ -164,39 +165,34 @@ class Role(AbstractPagePermission):
         gp.sites.add(site)
         self.derived_global_permissions.add(gp)
 
-    def grant_to_user(self, user, site):
+    def grant_to_user(self, user, site, pages=None):
         """Grant the given user this role for given site"""
         if self.is_site_wide:
             user.groups.add(self.get_site_specific_group(site))
         else:
-            try:
-                # this is a workaround for the fact that
-                # the interface doesn't yet support the selection of
-                # pages when working in a 'page by page' mode
-                # as a workaround, a page permission is granted on
-                # the site's first page
-                first_page = Page.objects.filter(site=site)\
-                    .order_by('tree_id', 'lft')[0]
-            except IndexError:
-                raise ValidationError(
-                    'Site needs to have at least one page '
-                    'before you can grant this role to an user')
-            else:
-                page_permission = PagePermission(page=first_page, user=user)
-                for key, value in self._get_permissions_dict().iteritems():
+            if pages is None:
+                raise ValidationError('At lest a page must be given')
+            # delete the existing page perms
+            self.get_user_page_perms(user, site).delete()
+            # and assign the new ones
+            for page in pages:
+                page_permission = PagePermission(
+                    page=page, user=user,
+                    grant_on=ACCESS_PAGE_AND_DESCENDANTS)
+                for key, value in self._get_permissions_dict()\
+                        .iteritems():
                     setattr(page_permission, key, value)
                 page_permission.save()
                 self.derived_page_permissions.add(page_permission)
-                user.groups.add(self.group)
-
+            user.groups.add(self.group)
         if not user.is_staff:
             user.is_staff = True
             user.save()
 
     def ungrant_from_user(self, user, site):
         """Remove the given user from this role from the given site"""
-        # TODO: Extract some 'state' class that implements the is/isn't site wide
-        #       differences
+        # TODO: Extract some 'state' class that implements the 
+        #       is/isn't site wide differences
         if self.is_site_wide:
             user.groups.remove(self.get_site_specific_group(site))
         else:
@@ -218,6 +214,10 @@ class Role(AbstractPagePermission):
             global_page_perm = self.derived_global_permissions.filter(sites=site)
             qs = User.objects.filter(groups__globalpagepermission=global_page_perm)
         else:
+            # we also return users that have page permissions that are
+            # not being managed by this role object. This would be the
+            # case if someone created page permissions without
+            # going through user setup
             qs = User.objects.filter(
                 pagepermission__page__site=site, groups=self.group)
         return qs.distinct()
@@ -228,6 +228,14 @@ class Role(AbstractPagePermission):
         #       a single site, but there's nothing stopping super-users
         #       from messing around with them
         return self.derived_global_permissions.get(sites=site).group
+
+    def get_user_page_perms(self, user, site):
+        """For a non site wide role, returns the pages that the given
+        user has access to on the given site."""
+        if self.is_site_wide:
+            raise ValueError(
+                'This makes sense only for non site wide roles')
+        return self.derived_page_permissions.filter(page__site=site, user=user)
 
 
 def create_role_groups(instance, **kwargs):
@@ -257,6 +265,10 @@ def delete_role_groups(instance, **kwargs):
 
 
 def update_site_specific_groups(instance, **kwargs):
+    """This signal handler updates all auto generated groups
+    that are being managed by a role when the base group on which
+    the role is built gets updated
+    """
     group = instance
     try:
         role = Role.objects.get(group=group)

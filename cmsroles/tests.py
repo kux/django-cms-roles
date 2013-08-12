@@ -63,8 +63,8 @@ class BasicSiteSetupTest(TestCase):
         vasile = User.objects.create(username='vasile', is_staff=True)
         editor_role.grant_to_user(vasile, bar_site)
         bob = User.objects.create(username='bob', is_staff=True)
-        create_page('master', 'template.html', language='en', site=bar_site)
-        writer_role.grant_to_user(bob, bar_site)
+        master = create_page('master', 'template.html', language='en', site=bar_site)
+        writer_role.grant_to_user(bob, bar_site, [master])
 
     def _create_non_site_wide_role(self):
         writer_group = Group.objects.create(name='writer')
@@ -73,8 +73,8 @@ class BasicSiteSetupTest(TestCase):
             can_add=False)
         foo_site = Site.objects.create(name='foo.site.com', domain='foo.site.com')
         user = User.objects.create(username='gigi', is_staff=True)
-        create_page('master', 'template.html', language='en', site=foo_site)
-        writer_role.grant_to_user(user, foo_site)
+        master = create_page('master', 'template.html', language='en', site=foo_site)
+        writer_role.grant_to_user(user, foo_site, [master])
         return writer_role, user, foo_site
 
     def test_is_admin(self):
@@ -344,21 +344,21 @@ class BasicSiteSetupTest(TestCase):
         self.client.login(username='root', password='root')
         response = self.client.post('/admin/cmsroles/usersetup/?site=%s' % foo_site.pk, {
                 # management form
-                u'form-MAX_NUM_FORMS': [u''],
-                u'form-TOTAL_FORMS': [u'3'],
-                u'form-INITIAL_FORMS': [u'3'],
+                u'user-roles-MAX_NUM_FORMS': [u''],
+                u'user-roles-TOTAL_FORMS': [u'3'],
+                u'user-roles-INITIAL_FORMS': [u'3'],
                 # change joe to a developer
-                u'form-0-user': [unicode(joe.pk)],
-                u'form-0-role': [unicode(developer.pk)],
-                u'form-0-site': [unicode(foo_site.pk)],
+                u'user-roles-0-user': [unicode(joe.pk)],
+                u'user-roles-0-role': [unicode(developer.pk)],
+                u'user-roles-0-current_site': [unicode(foo_site.pk)],
                 # george to an editor
-                u'form-1-user': [unicode(george.pk)],
-                u'form-1-role': [unicode(editor.pk)],
-                u'form-1-site': [unicode(foo_site.pk)],
+                u'user-roles-1-user': [unicode(george.pk)],
+                u'user-roles-1-role': [unicode(editor.pk)],
+                u'user-roles-1-current_site': [unicode(foo_site.pk)],
                 # robin stays the same
-                u'form-2-user': [unicode(robin.pk)],
-                u'form-2-role': [unicode(editor.pk)],
-                u'form-2-site': [unicode(foo_site.pk)],
+                u'user-roles-2-user': [unicode(robin.pk)],
+                u'user-roles-2-role': [unicode(editor.pk)],
+                u'user-roles-2-current_site': [unicode(foo_site.pk)],
                 u'next': [u'continue']}
                 )
         self.assertEqual(response.status_code, 302)
@@ -377,17 +377,17 @@ class BasicSiteSetupTest(TestCase):
         self.client.login(username='root', password='root')
         response = self.client.post('/admin/cmsroles/usersetup/?site=%s' % foo_site.pk, {
                 # management form
-                u'form-MAX_NUM_FORMS': [u''],
-                u'form-TOTAL_FORMS': [u'2'],
-                u'form-INITIAL_FORMS': [u'2'],
+                u'user-roles-MAX_NUM_FORMS': [u''],
+                u'user-roles-TOTAL_FORMS': [u'2'],
+                u'user-roles-INITIAL_FORMS': [u'2'],
                 # joe remains an admin
-                u'form-0-user': [unicode(joe.pk)],
-                u'form-0-role': [unicode(admin.pk)],
-                u'form-0-site': [unicode(foo_site.pk)],
+                u'user-roles-0-user': [unicode(joe.pk)],
+                u'user-roles-0-role': [unicode(admin.pk)],
+                u'user-roles-0-current_site': [unicode(foo_site.pk)],
                 # george remains a developer
-                u'form-1-user': [unicode(george.pk)],
-                u'form-1-role': [unicode(developer.pk)],
-                u'form-1-site': [unicode(foo_site.pk)],
+                u'user-roles-1-user': [unicode(george.pk)],
+                u'user-roles-1-role': [unicode(developer.pk)],
+                u'user-roles-1-current_site': [unicode(foo_site.pk)],
                 # but robin gets removed !!
                 u'next': [u'continue']}
                 )
@@ -407,25 +407,25 @@ class BasicSiteSetupTest(TestCase):
         self.client.login(username='root', password='root')
         response = self.client.post('/admin/cmsroles/usersetup/?site=%s' % foo_site.pk, {
                 # management form
-                u'form-MAX_NUM_FORMS': [u''],
-                u'form-TOTAL_FORMS': [u'4'],
-                u'form-INITIAL_FORMS': [u'4'],
+                u'user-roles-MAX_NUM_FORMS': [u''],
+                u'user-roles-TOTAL_FORMS': [u'4'],
+                u'user-roles-INITIAL_FORMS': [u'4'],
                 # joe remains an admin
-                u'form-0-user': [unicode(joe.pk)],
-                u'form-0-role': [unicode(admin.pk)],
-                u'form-0-site': [unicode(foo_site.pk)],
+                u'user-roles-0-user': [unicode(joe.pk)],
+                u'user-roles-0-role': [unicode(admin.pk)],
+                u'user-roles-0-current_site': [unicode(foo_site.pk)],
                 # george remains a developer
-                u'form-1-user': [unicode(george.pk)],
-                u'form-1-role': [unicode(developer.pk)],
-                u'form-1-site': [unicode(foo_site.pk)],
+                u'user-roles-1-user': [unicode(george.pk)],
+                u'user-roles-1-role': [unicode(developer.pk)],
+                u'user-roles-1-current_site': [unicode(foo_site.pk)],
                 # robin remains an editor
-                u'form-2-user': [unicode(robin.pk)],
-                u'form-2-role': [unicode(editor.pk)],
-                u'form-2-site': [unicode(foo_site.pk)],
+                u'user-roles-2-user': [unicode(robin.pk)],
+                u'user-roles-2-role': [unicode(editor.pk)],
+                u'user-roles-2-current_site': [unicode(foo_site.pk)],
                 # but we also add criss to foo_site
-                u'form-3-user': [unicode(criss.pk)],
-                u'form-3-role': [unicode(admin.pk)],
-                u'form-3-site': [unicode(foo_site.pk)],
+                u'user-roles-3-user': [unicode(criss.pk)],
+                u'user-roles-3-role': [unicode(admin.pk)],
+                u'user-roles-3-current_site': [unicode(foo_site.pk)],
                 u'next': [u'continue']}
                 )
         self.assertEqual(response.status_code, 302)

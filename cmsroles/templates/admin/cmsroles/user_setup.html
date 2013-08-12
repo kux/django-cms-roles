@@ -5,6 +5,7 @@
 {% load i18n admin_static admin_modify %}
 {% load url from future %}
 {% load admin_urls %}
+{% load dict_lookup %}
 
 {% block extrastyle %}
   {% load adminmedia %}
@@ -59,7 +60,7 @@
     {{ user_formset.non_form_errors }}
     <div id="user_formset_fields">
       {% for form in user_formset %}
-        {% include "admin/cmsroles/user_form.html" %}      
+        {% include "admin/cmsroles/user_form.html" %}
       {% endfor %}
     </div>
     <input id="next_on_save" name="next" type="hidden" value="continue"/>
@@ -70,6 +71,14 @@
   <input id="save" type="submit" class="default" value="Save" />
   <input id="save_and_continue" type="submit" value="Save and continue editing" />
 </div>
+
+<script type="text/javascript">
+document.roles = {
+  {% for role, is_site_wide in role_pk_to_site_wide_js %}
+     '{{ role }}': {{ is_site_wide }} ,
+  {% endfor %}
+}
+</script>
 
 <script type="text/javascript" src="{% admin_media_prefix %}js/core.js"></script>
 <script type="text/javascript" src="{% admin_media_prefix %}js/admin/RelatedObjectLookups.js"></script>
