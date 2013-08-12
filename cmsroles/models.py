@@ -164,25 +164,21 @@ class Role(AbstractPagePermission):
         gp.sites.add(site)
         self.derived_global_permissions.add(gp)
 
-    def grant_to_user(self, user, site):
+    def grant_to_user(self, user, site, pages=None):
         """Grant the given user this role for given site"""
         if self.is_site_wide:
             user.groups.add(self.get_site_specific_group(site))
         else:
-            try:
-                # this is a workaround for the fact that
-                # the interface doesn't yet support the selection of
-                # pages when working in a 'page by page' mode
-                # as a workaround, a page permission is granted on
-                # the site's first page
-                first_page = Page.objects.filter(site=site)\
-                    .order_by('tree_id', 'lft')[0]
-            except IndexError:
-                raise ValidationError(
-                    'Site needs to have at least one page '
-                    'before you can grant this role to an user')
-            else:
-                page_permission = PagePermission(page=first_page, user=user)
+            if pages is None:
+                try:
+                    pages = [Page.objects.filter(site=site)\
+                        .order_by('tree_id', 'lft')[0]]
+                except IndexError:
+                    raise ValidationError(
+                        'Site needs to have at least one page '
+                        'before you can grant this role to an user')
+            for page in pages:
+                page_permission = PagePermission(page=page, user=user)
                 for key, value in self._get_permissions_dict().iteritems():
                     setattr(page_permission, key, value)
                 page_permission.save()
@@ -257,6 +253,10 @@ def delete_role_groups(instance, **kwargs):
 
 
 def update_site_specific_groups(instance, **kwargs):
+    """This signal handler updates all auto generated groups
+    that are being managed by a role when the base group on which
+    the role is built gets updated
+    """
     group = instance
     try:
         role = Role.objects.get(group=group)

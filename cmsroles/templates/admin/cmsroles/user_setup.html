@@ -5,6 +5,7 @@
 {% load i18n admin_static admin_modify %}
 {% load url from future %}
 {% load admin_urls %}
+{% load dict_lookup %}
 
 {% block extrastyle %}
   {% load adminmedia %}
@@ -59,7 +60,10 @@
     {{ user_formset.non_form_errors }}
     <div id="user_formset_fields">
       {% for form in user_formset %}
-        {% include "admin/cmsroles/user_form.html" %}      
+        {% include "admin/cmsroles/user_form.html" %}
+        {% with page_formset=page_formsets|get_item:form.user.value %}
+          {% include "admin/cmsroles/page_formset.html" %}
+        {% endwith %}
       {% endfor %}
     </div>
     <input id="next_on_save" name="next" type="hidden" value="continue"/>
