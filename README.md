@@ -62,6 +62,9 @@ the following:
 * when a django group referenced by a Role is updated all of the auto generated django groups
   are also updated
 
+For a visual explanation of how this workd, check out the following
+[diagram](https://github.com/kux/django-cms-roles/blob/master/user_setup_diagram.png)
+
 
 Page by page roles
 ------------------
