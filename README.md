@@ -13,8 +13,7 @@ As an example, let's consider:
 * you need these two user roles: site admins and content writers.
 * you have three sites: A, B and C
 
-Let's say you want to create a site admin for site A
-You need to do the following:
+If you want to create a site admin for site A you need to do the following:
 * create a django group named 'site admin for site A'
 * create the new user and assign him to the previously created group
 * create a global page permission which does the actual mapping from the previously created group to site A
@@ -24,8 +23,8 @@ It's easy to notice that the number of django groups you will need is:
 
 Having a setup with 5 roles and 20 sites results in having to maintain 100 django groups!!
 
-If at some point in time you will need to update one of the roles by adding additional permissions
-you will end up having to update each one of the site specific group. Keeping all of these
+If at some point you need to update one of the roles by adding additional permissions,
+you then have to update each one of the site specific groups. Keeping all of these
 groups in sync would be quite painful and error prone.
 
 Roles
@@ -48,10 +47,10 @@ Under the hood a Role object maintains a list of auto generated global page perm
 and django groups. The number of auto generated global page permissions and django groups
 is equal to the ```number of roles * number of sites```. These auto generated groups and
 global page permissions are hidden from the admin interface so that users don't accidentally
-change them causing them to become out of sync.
+change them thus causing them to become out of sync.
 
-A Role objects maintains the auto generated global page permissions and django groups in the sense
-that:
+A Role objects maintains the auto generated global page permissions and django groups by doing
+the following:
 * whenever a new site is added the a site specific django group and global page permission
   for each role will be auto created
 * when a new role is added, a site specific django group and global page permission
@@ -69,8 +68,8 @@ Page by page roles
 When giving an user a role you will also need to specify the pages on which that role applies.
 This is the equivalent of creating PagePermission objects by using the cms' 'Change Page' view.
 
-When functioning in this mode, no global page permissions or django groups need to be auto generated.
-However, the role will maintain a list of ```PagePermission```s
+No global page permissions or django groups need to be auto generated when functioning in this mode.
+The role will maintain a list of ```PagePermission```s
 
 
 **Note**: For understanding the inner workings of django-cms-roles it would be worth to check the
