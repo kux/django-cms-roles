@@ -3,6 +3,7 @@ from django.contrib.sites.models import Site
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import signals, Q
+from django.dispatch import receiver
 from django.utils.translation import ugettext_lazy as _
 
 from cms.models.permissionmodels import (
@@ -230,6 +231,22 @@ class Role(AbstractPagePermission):
         return self.derived_global_permissions.get(sites=site).group
 
 
+@receiver(signals.pre_delete, sender=Group)
+def delete_role(instance, **kwargs):
+    """When group that a role uses gets deleted, that role also
+    and all of the auto generated page permissions and groups
+    also need to be deleted. Whithout this pre_delete signal the
+    role would be deleted, but the deletion would happen without going
+    through the role's delete method
+    """
+    for role in Role.objects.filter(group=instance):
+        # Role.objects.filter(group=instance) should
+        # return 0 or 1 roles objects, unless someone
+        # created role objects without going through .clean
+        role.delete()
+
+
+@receiver(signals.post_save, sender=Site)
 def create_role_groups(instance, **kwargs):
     site = instance
     if kwargs['created']:
@@ -237,6 +254,7 @@ def create_role_groups(instance, **kwargs):
             role.add_site_specific_global_page_perm(site)
 
 
+@receiver(signals.pre_delete, sender=Site)
 def set_role_groups_to_delete(instance, **kwargs):
     instance._role_groups = []
     for role in Role.objects.all():
@@ -251,12 +269,17 @@ def set_role_groups_to_delete(instance, **kwargs):
                 instance._role_groups.append(role_site_group)
 
 
+@receiver(signals.post_delete, sender=Site)
 def delete_role_groups(instance, **kwargs):
     for site_group in getattr(instance, '_role_groups', []):
         site_group.delete()
 
 
+@receiver(signals.m2m_changed, sender=Group.permissions.through)
 def update_site_specific_groups(instance, **kwargs):
+    action = kwargs['action']
+    if not action.startswith('post_'):
+        return
     group = instance
     try:
         role = Role.objects.get(group=group)
@@ -269,11 +292,3 @@ def update_site_specific_groups(instance, **kwargs):
         permissions = group.permissions.all()
         for derived_group in derived_groups:
             derived_group.permissions = permissions
-
-
-signals.post_save.connect(create_role_groups, sender=Site)
-
-signals.pre_delete.connect(set_role_groups_to_delete, sender=Site)
-signals.post_delete.connect(delete_role_groups, sender=Site)
-
-signals.m2m_changed.connect(update_site_specific_groups, sender=Group.permissions.through)
