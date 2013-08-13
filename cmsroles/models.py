@@ -80,19 +80,20 @@ class Role(AbstractPagePermission):
             if query.exists():
                 raise ValidationError(u'A Role for group "%s" already exists' % self.group.name)
 
-    def _update_site_groups_permissions(self):
+    def update_site_groups_permissions(self, update_names):
         new_group_permissions = self.group.permissions.all()
         global_perm_q = self.derived_global_permissions.select_related(
-            'group').prefetch_related('group__permissions')
+            'group')
         site_groups = [global_perm.group for global_perm in global_perm_q]
         for site_group in site_groups:
             # change permissions
             site_group.permissions = new_group_permissions
             # rename group
-            parsed_name = parse(self.group_name_pattern, site_group.name)
-            site_group.name = self.group_name_pattern.format(
-                site_id=parsed_name['site_id'], group_id=self.group.id)
-            site_group.save()
+            if update_names:
+                parsed_name = parse(self.group_name_pattern, site_group.name)
+                site_group.name = self.group_name_pattern.format(
+                    site_id=parsed_name['site_id'], group_id=self.group.id)
+                site_group.save()
 
     def _propagate_perm_changes(self, derived_perms):
         permissions = self._get_permissions_dict()
@@ -108,7 +109,7 @@ class Role(AbstractPagePermission):
             group_changed = (self._old_group is not None and
                              self._old_group != self.group_id)
             if group_changed:
-                self._update_site_groups_permissions()
+                self.update_site_groups_permissions(update_names=True)
 
             # TODO: improve performance by having less queries
             derived_global_permissions = self.derived_global_permissions.all()
@@ -286,9 +287,4 @@ def update_site_specific_groups(instance, **kwargs):
     except Role.DoesNotExist:
         return
     else:
-        derived_global_permissions = role.derived_global_permissions.all()\
-            .select_related('group')
-        derived_groups = [gp.group for gp in derived_global_permissions]
-        permissions = group.permissions.all()
-        for derived_group in derived_groups:
-            derived_group.permissions = permissions
+        role.update_site_groups_permissions(update_names=False)
