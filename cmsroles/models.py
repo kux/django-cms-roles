@@ -204,7 +204,8 @@ class Role(AbstractPagePermission):
         else:
             for perm in self.derived_page_permissions.filter(page__site=site, user=user):
                 perm.delete()
-            user.groups.remove(self.group)
+            if self.derived_page_permissions.count() == 0:
+                user.groups.remove(self.group)
 
     def all_users(self):
         """Returns all users having this role."""
