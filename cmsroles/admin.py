@@ -105,32 +105,6 @@ admin.site.unregister(GlobalPagePermission)
 admin.site.register(GlobalPagePermission, ExtendedGlobalPagePermssionAdmin)
 
 
-class ExtendedUserAdmin(_get_registered_modeladmin(User)):
-
-    def formfield_for_manytomany(self, db_field, request, **kwargs):
-        if db_field.rel.to == Group:
-            kwargs["queryset"] = ExtendedGroupAdmin.get_filtered_queryset()
-        return super(ExtendedUserAdmin, self).formfield_for_manytomany(
-            db_field, request, **kwargs)
-
-
-admin.site.unregister(User)
-admin.site.register(User, ExtendedUserAdmin)
-
-
-class ExtendedPageUserAdmin(_get_registered_modeladmin(PageUser)):
-
-    def formfield_for_manytomany(self, db_field, request, **kwargs):
-        if db_field.rel.to == Group:
-            kwargs["queryset"] = ExtendedGroupAdmin.get_filtered_queryset()
-        return super(ExtendedPageUserAdmin, self).formfield_for_manytomany(
-            db_field, request, **kwargs)
-
-
-admin.site.unregister(PageUser)
-admin.site.register(PageUser, ExtendedPageUserAdmin)
-
-
 class ExtendedPageUserGroupAdmin(_get_registered_modeladmin(PageUserGroup)):
 
     def queryset(self, request):
