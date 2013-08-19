@@ -214,6 +214,10 @@ class Role(AbstractPagePermission):
             global_page_perm = self.derived_global_permissions.filter(sites=site)
             qs = User.objects.filter(groups__globalpagepermission=global_page_perm)
         else:
+            # we also return users that have page permissions that are
+            # not being managed by this role object. This would be the
+            # case if someone created page permissions without
+            # going through user setup
             qs = User.objects.filter(
                 pagepermission__page__site=site, groups=self.group)
         return qs.distinct()

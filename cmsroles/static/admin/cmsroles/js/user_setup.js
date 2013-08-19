@@ -5,12 +5,13 @@ django.jQuery(document).ready(function(){
     var current_site = $("#site_selector [selected='selected']").val()
 
     function set_hidden_site_values(){
-        $('input[name*="site"]').val(current_site)
+        $('input[name*="current_site"]').val(current_site)
     };
 
     set_hidden_site_values();
 
     $('.user_settings').formset({
+        prefix: 'user-roles',
         addText: 'Assign another user to this site',
         deleteText: '',
         added: function(row){

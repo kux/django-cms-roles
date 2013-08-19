@@ -24,6 +24,9 @@
 
 {% block content %}
 <h1>User Setup</h1>
+<span>foo</span>
+{{ test_form.as_p }}
+<span>bar</span>
 <div class="module aligned" id="site_selection">
 <p>
   <label for="site_selector"><strong>Select site:</strong></label>
@@ -61,9 +64,12 @@
     <div id="user_formset_fields">
       {% for form in user_formset %}
         {% include "admin/cmsroles/user_form.html" %}
+        {% comment %}
         {% with page_formset=page_formsets|get_item:form.user.value %}
           {% include "admin/cmsroles/page_formset.html" %}
         {% endwith %}
+        {% endcomment %}
+
       {% endfor %}
     </div>
     <input id="next_on_save" name="next" type="hidden" value="continue"/>

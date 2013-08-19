@@ -5,10 +5,11 @@ from django.core.exceptions import PermissionDenied
 from django.core.urlresolvers import reverse
 from django import forms
 from django.forms.formsets import formset_factory, BaseFormSet
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, HttpResponse
 from django.shortcuts import render_to_response
-from django.template import RequestContext
+from django.template import RequestContext, loader, Context
 from django.utils.encoding import smart_unicode
+from django.utils import simplejson
 
 from cms.models.pagemodel import Page
 from cms.models.permissionmodels import PagePermission
@@ -36,9 +37,10 @@ class UserForm(forms.Form):
     role = forms.ModelChoiceField(
         queryset=Role.objects.all(),
         required=False)
-    site = forms.ModelChoiceField(
+    current_site = forms.ModelChoiceField(
         queryset=Site.objects.all(),
         widget=forms.HiddenInput())
+    is_site_wide = forms.BooleanField(widget=forms.HiddenInput())
 
     def clean(self):
         cleaned_data = super(UserForm, self).clean()
@@ -47,7 +49,7 @@ class UserForm(forms.Form):
         if (user is None) != (role is None):
             raise forms.ValidationError('Both user and role need to be set')
         if role is not None and not role.is_site_wide:
-            site = self.cleaned_data.get('site', None)
+            site = self.cleaned_data.get('current_site', None)
             if not Page.objects.filter(site=site).exists():
                 raise forms.ValidationError(
                     'Site needs to have at least one page '
@@ -189,7 +191,7 @@ def _build_user_pages_formsets(PageFormSet, current_site, assigned_users):
 
 
 @user_passes_test(is_site_admin, login_url='/admin/')
-def user_setup(request):
+def get_page_formset(request): 
     site_pk = _get_site_pk(request)
     current_site, administered_sites = _get_user_sites(request.user, site_pk)
 
@@ -197,8 +199,35 @@ def user_setup(request):
         page = forms.ModelChoiceField(
             queryset=Page.objects.filter(site=current_site))
 
-    UserFormSet = formset_factory(UserForm, formset=BaseUserFormSet, extra=1)
     PageFormSet = formset_factory(PageForm, formset=BaseFormSet, extra=1)
+
+    user_pk = request.GET.get('user')
+    role_pk = request.GET.get('role')
+    role = Role.objects.get(pk=role_pk)
+    user = User.objects.get(pk=user_pk)
+    if role.is_site_wide:
+        return ''  # someone changed the role into being site wide the meanwhile
+    page_perms = role.derived_page_permissions.filter(
+        page__site=current_site,
+        user=user)
+    initial_data = []
+    for page_perm in page_perms:
+        initial_data.append({'page': page_perm.page})
+    page_formset = PageFormSet(initial=initial_data,
+                               prefix='user-%d' % user.pk)
+    rendered_formset = loader.get_template(
+        'admin/cmsroles/page_formset.html').render(
+        Context({'page_formset': page_formset}))
+    response = {'page_formset': rendered_formset}
+    return HttpResponse(simplejson.dumps(response),
+                        content_type="application/json")
+
+
+@user_passes_test(is_site_admin, login_url='/admin/')
+def user_setup(request):
+    site_pk = _get_site_pk(request)
+    current_site, administered_sites = _get_user_sites(request.user, site_pk)
+    UserFormSet = formset_factory(UserForm, formset=BaseUserFormSet, extra=1)
 
     assigned_users = get_site_users(current_site)
 
@@ -214,24 +243,20 @@ def user_setup(request):
                 if user is None and role is None:
                     continue
                 submitted_users[user] = role
-                if not role.is_site_wide:
-                    user_pages[user] = _get_user_pages(request, PageFormSet, user)
-
             _update_site_users(current_site, assigned_users, submitted_users,
                                user_pages)
             return _get_redirect(request, site_pk)
     else:
         initial_data = [
-            {'user': user, 'role': role, 'site': current_site}
+            {'user': user, 'role': role, 'current_site': current_site,
+             'is_site_wide': role.is_site_wide}
             for user, role in assigned_users.iteritems()]
         user_formset = UserFormSet(initial=initial_data, prefix='user-roles')
-        page_formsets = _build_user_pages_formsets(PageFormSet, current_site, assigned_users)
     context = {'opts': {'app_label': 'cmsroles'},
                'app_label': 'Cmsroles',
                'administered_sites': administered_sites,
                'current_site': current_site,
                'user_formset': user_formset,
-               'page_formsets': page_formsets,
                'user': request.user}
     return render_to_response('admin/cmsroles/user_setup.html', context,
                               context_instance=RequestContext(request))
