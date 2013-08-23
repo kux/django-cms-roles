@@ -3,6 +3,7 @@ from django.contrib.auth.models import User
 from django.contrib.sites.models import Site
 from django.core.exceptions import PermissionDenied
 from django.core.urlresolvers import reverse
+from django.db import transaction
 from django import forms
 from django.forms.formsets import formset_factory, BaseFormSet
 from django.http import HttpResponseRedirect, HttpResponse
@@ -40,7 +41,6 @@ class UserForm(forms.Form):
     current_site = forms.ModelChoiceField(
         queryset=Site.objects.all(),
         widget=forms.HiddenInput())
-    is_site_wide = forms.BooleanField(widget=forms.HiddenInput())
 
     def clean(self):
         cleaned_data = super(UserForm, self).clean()
@@ -129,7 +129,7 @@ def _update_site_users(current_site, assigned_users, submitted_users, user_pages
         role.ungrant_from_user(user, current_site)
     for user, role in newly_assigned_users:
         if not role.is_site_wide:
-            pages = user_pages[user]
+            pages = user_pages.get(user, None)
         else:
             pages = None
         role.grant_to_user(user, current_site, pages)
@@ -137,7 +137,7 @@ def _update_site_users(current_site, assigned_users, submitted_users, user_pages
         previous_role = assigned_users[user]
         previous_role.ungrant_from_user(user, current_site)
         if not role.is_site_wide:
-            pages = user_pages[user]
+            pages = user_pages.get(user, None)
         else:
             pages = None
         new_role.grant_to_user(user, current_site, pages)
@@ -201,8 +201,8 @@ def get_page_formset(request):
 
     PageFormSet = formset_factory(PageForm, formset=BaseFormSet, extra=1)
 
-    user_pk = request.GET.get('user')
-    role_pk = request.GET.get('role')
+    user_pk = request.POST.get('user')
+    role_pk = request.POST.get('role')
     role = Role.objects.get(pk=role_pk)
     user = User.objects.get(pk=user_pk)
     if role.is_site_wide:
@@ -224,6 +224,7 @@ def get_page_formset(request):
 
 
 @user_passes_test(is_site_admin, login_url='/admin/')
+@transaction.commit_on_success
 def user_setup(request):
     site_pk = _get_site_pk(request)
     current_site, administered_sites = _get_user_sites(request.user, site_pk)
@@ -248,15 +249,21 @@ def user_setup(request):
             return _get_redirect(request, site_pk)
     else:
         initial_data = [
-            {'user': user, 'role': role, 'current_site': current_site,
-             'is_site_wide': role.is_site_wide}
+            {'user': user, 'role': role, 'current_site': current_site}
             for user, role in assigned_users.iteritems()]
         user_formset = UserFormSet(initial=initial_data, prefix='user-roles')
+
+    all_roles = Role.objects.all()
     context = {'opts': {'app_label': 'cmsroles'},
                'app_label': 'Cmsroles',
                'administered_sites': administered_sites,
                'current_site': current_site,
                'user_formset': user_formset,
-               'user': request.user}
+               'user': request.user,
+               'role_name_to_site_wide': [(role.name, 'true' if role.is_site_wide else 'false')
+                                          for role in all_roles],
+               'role_pk_to_site_wide': dict((role.pk, role.is_site_wide)
+                                            for role in all_roles)}
+
     return render_to_response('admin/cmsroles/user_setup.html', context,
                               context_instance=RequestContext(request))

@@ -1,3 +1,10 @@
+{% load dict_lookup %}
+
 <div class="user_settings">
   {{ form.as_p }}
+
+  {% if not role_pk_to_site_wide|get_item:form.role.value %}
+     <a class='assign-pages' href="#">Assign pages</a>
+  {% endif %}
+
 </div>

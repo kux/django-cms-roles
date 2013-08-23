@@ -57,4 +57,10 @@ django.jQuery(document).ready(function(){
         });
     });
 
+    $('.assign-pages').click(function(){
+        var usettings = $(this).parent('.user_settings');
+        var role = $('select[name$="role"]', usettings);
+        var user = $('select[name$="user"]', usettings);
+    });
+
 });

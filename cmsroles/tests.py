@@ -350,15 +350,15 @@ class BasicSiteSetupTest(TestCase):
                 # change joe to a developer
                 u'user-roles-0-user': [unicode(joe.pk)],
                 u'user-roles-0-role': [unicode(developer.pk)],
-                u'user-roles-0-site': [unicode(foo_site.pk)],
+                u'user-roles-0-current_site': [unicode(foo_site.pk)],
                 # george to an editor
                 u'user-roles-1-user': [unicode(george.pk)],
                 u'user-roles-1-role': [unicode(editor.pk)],
-                u'user-roles-1-site': [unicode(foo_site.pk)],
+                u'user-roles-1-current_site': [unicode(foo_site.pk)],
                 # robin stays the same
                 u'user-roles-2-user': [unicode(robin.pk)],
                 u'user-roles-2-role': [unicode(editor.pk)],
-                u'user-roles-2-site': [unicode(foo_site.pk)],
+                u'user-roles-2-current_site': [unicode(foo_site.pk)],
                 u'next': [u'continue']}
                 )
         self.assertEqual(response.status_code, 302)
@@ -383,11 +383,11 @@ class BasicSiteSetupTest(TestCase):
                 # joe remains an admin
                 u'user-roles-0-user': [unicode(joe.pk)],
                 u'user-roles-0-role': [unicode(admin.pk)],
-                u'user-roles-0-site': [unicode(foo_site.pk)],
+                u'user-roles-0-current_site': [unicode(foo_site.pk)],
                 # george remains a developer
                 u'user-roles-1-user': [unicode(george.pk)],
                 u'user-roles-1-role': [unicode(developer.pk)],
-                u'user-roles-1-site': [unicode(foo_site.pk)],
+                u'user-roles-1-current_site': [unicode(foo_site.pk)],
                 # but robin gets removed !!
                 u'next': [u'continue']}
                 )
@@ -413,19 +413,19 @@ class BasicSiteSetupTest(TestCase):
                 # joe remains an admin
                 u'user-roles-0-user': [unicode(joe.pk)],
                 u'user-roles-0-role': [unicode(admin.pk)],
-                u'user-roles-0-site': [unicode(foo_site.pk)],
+                u'user-roles-0-current_site': [unicode(foo_site.pk)],
                 # george remains a developer
                 u'user-roles-1-user': [unicode(george.pk)],
                 u'user-roles-1-role': [unicode(developer.pk)],
-                u'user-roles-1-site': [unicode(foo_site.pk)],
+                u'user-roles-1-current_site': [unicode(foo_site.pk)],
                 # robin remains an editor
                 u'user-roles-2-user': [unicode(robin.pk)],
                 u'user-roles-2-role': [unicode(editor.pk)],
-                u'user-roles-2-site': [unicode(foo_site.pk)],
+                u'user-roles-2-current_site': [unicode(foo_site.pk)],
                 # but we also add criss to foo_site
                 u'user-roles-3-user': [unicode(criss.pk)],
                 u'user-roles-3-role': [unicode(admin.pk)],
-                u'user-roles-3-site': [unicode(foo_site.pk)],
+                u'user-roles-3-current_site': [unicode(foo_site.pk)],
                 u'next': [u'continue']}
                 )
         self.assertEqual(response.status_code, 302)

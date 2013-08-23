@@ -69,7 +69,6 @@
           {% include "admin/cmsroles/page_formset.html" %}
         {% endwith %}
         {% endcomment %}
-
       {% endfor %}
     </div>
     <input id="next_on_save" name="next" type="hidden" value="continue"/>
@@ -80,6 +79,14 @@
   <input id="save" type="submit" class="default" value="Save" />
   <input id="save_and_continue" type="submit" value="Save and continue editing" />
 </div>
+
+<script type="text/javascript">
+document.roles = {
+  {% for role, is_site_wide in roles_name_to_site_wide %}
+     '{{ role }}': {{ is_site_wide }} ,
+  {% endfor %}
+}
+</script>
 
 <script type="text/javascript" src="{% admin_media_prefix %}js/core.js"></script>
 <script type="text/javascript" src="{% admin_media_prefix %}js/admin/RelatedObjectLookups.js"></script>
