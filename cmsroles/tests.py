@@ -245,11 +245,49 @@ class ObjectInteractionsTests(TestCase, HelpersMixin):
         admin_role = Role.objects.create(name='site admin', group=base_site_admin_group,
                                          is_site_wide=True)
         generated_group = admin_role.get_site_specific_group(foo_site)
-        self.assertEqual(generated_group.name, Role.group_name_pattern.format(
-            site_id=foo_site.pk, group_id=base_site_admin_group.pk))
+        self.assertEqual(generated_group.name, Role.group_name_pattern % {
+                'role_name': admin_role.name,
+                'site_domain': foo_site.domain})
         generated_group = admin_role.get_site_specific_group(bar_site)
-        self.assertEqual(generated_group.name, Role.group_name_pattern.format(
-            site_id=bar_site.pk, group_id=base_site_admin_group.pk))
+        self.assertEqual(generated_group.name, Role.group_name_pattern % {
+                'role_name': admin_role.name,
+                'site_domain': bar_site.domain})
+
+    def test_generated_group_names_on_role_name_change(self):
+        foo_site = Site.objects.create(name='foo.site.com', domain='foo.site.com')
+        base_site_admin_group = self._create_site_admin_group()
+        admin_role = Role.objects.create(name='site admin', group=base_site_admin_group,
+                                         is_site_wide=True)
+        generated_group = admin_role.get_site_specific_group(foo_site)
+        self.assertEqual(generated_group.name, Role.group_name_pattern % {
+                'role_name': admin_role.name,
+                'site_domain': foo_site.domain})
+        admin_role.name = 'new site admin'
+        admin_role.save()
+        # re-fetch the generated group
+        generated_group = admin_role.get_site_specific_group(foo_site)
+        # and test that the generated group name is still in sync with the role name
+        self.assertEqual(generated_group.name, Role.group_name_pattern % {
+                'role_name': admin_role.name,
+                'site_domain': foo_site.domain})
+
+    def test_generated_group_names_on_site_domain_change(self):
+        foo_site = Site.objects.create(name='foo.site.com', domain='foo.site.com')
+        base_site_admin_group = self._create_site_admin_group()
+        admin_role = Role.objects.create(name='site admin', group=base_site_admin_group,
+                                         is_site_wide=True)
+        generated_group = admin_role.get_site_specific_group(foo_site)
+        self.assertEqual(generated_group.name, Role.group_name_pattern % {
+                'role_name': admin_role.name,
+                'site_domain': foo_site.domain})
+        foo_site.domain = 'zanewfoo.com'
+        foo_site.save()
+        # re-fetch the generated group
+        generated_group = admin_role.get_site_specific_group(foo_site)
+        # and test that the generated group name is still in sync with the site domain
+        self.assertEqual(generated_group.name, Role.group_name_pattern % {
+                'role_name': admin_role.name,
+                'site_domain': foo_site.domain})
 
     def test_site_group_perms_change_on_role_group_change(self):
         foo_site = Site.objects.create(

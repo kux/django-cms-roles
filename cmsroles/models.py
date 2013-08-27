@@ -36,7 +36,7 @@ class Role(AbstractPagePermission):
     When is_site_wide is True the role will maintain derived_global_permissions
     When is_site_wide is False this role will maintain derived_page_permissions
 
-    The class invariant is that one of derived_global_permissions and
+    A class invariant is that one of derived_global_permissions and
     derived_page_permissions must be empty at all times
     """
 
@@ -47,7 +47,7 @@ class Role(AbstractPagePermission):
         verbose_name_plural = _('roles')
         permissions = (('user_setup', 'Can access user setup'),)
 
-    group_name_pattern = 'cmsroles-generated-{site_id}-{group_id}'
+    group_name_pattern = '%(role_name)s-%(site_domain)s'
 
     name = models.CharField(max_length=50, unique=True)
 
@@ -68,6 +68,7 @@ class Role(AbstractPagePermission):
         super(Role, self).__init__(*args, **kwargs)
         self._old_group = self.group_id
         self._old_is_site_wide = self.is_site_wide
+        self._old_name = self.name
 
     def clean(self):
         if self.group is not None:
@@ -80,20 +81,23 @@ class Role(AbstractPagePermission):
             if query.exists():
                 raise ValidationError(u'A Role for group "%s" already exists' % self.group.name)
 
-    def update_site_groups_permissions(self, update_names):
-        new_group_permissions = self.group.permissions.all()
+    def update_site_groups(self, update_names, update_permissions):
+        if update_permissions:
+            new_group_permissions = self.group.permissions.all()
+
         global_perm_q = self.derived_global_permissions.select_related(
-            'group')
-        site_groups = [global_perm.group for global_perm in global_perm_q]
-        for site_group in site_groups:
-            # change permissions
-            site_group.permissions = new_group_permissions
-            # rename group
+            'group', 'sites')
+        site_groups = [(global_perm.group, global_perm.sites.all()[0])
+                       for global_perm in global_perm_q]
+        for group, site in site_groups:
+            if update_permissions:
+                group.permissions = new_group_permissions
+
             if update_names:
-                parsed_name = parse(self.group_name_pattern, site_group.name)
-                site_group.name = self.group_name_pattern.format(
-                    site_id=parsed_name['site_id'], group_id=self.group.id)
-                site_group.save()
+                group.name = Role.group_name_pattern % {
+                    'role_name': self.name,
+                    'site_domain': site.domain}
+                group.save()
 
     def _propagate_perm_changes(self, derived_perms):
         permissions = self._get_permissions_dict()
@@ -104,13 +108,14 @@ class Role(AbstractPagePermission):
 
     def save(self, *args, **kwargs):
         super(Role, self).save(*args, **kwargs)
-
         if self.is_site_wide:
             group_changed = (self._old_group is not None and
                              self._old_group != self.group_id)
-            if group_changed:
-                self.update_site_groups_permissions(update_names=True)
-
+            role_name_changed = self._old_name != self.name
+            if group_changed or role_name_changed:
+                self.update_site_groups(
+                    update_names=True,
+                    update_permissions=group_changed)
             # TODO: improve performance by having less queries
             derived_global_permissions = self.derived_global_permissions.all()
             covered_sites = set(derived_global_permissions.values_list('sites', flat=True))
@@ -156,8 +161,9 @@ class Role(AbstractPagePermission):
         site_group = Group.objects.get(pk=self.group.pk)
         permissions = self.group.permissions.all()
         site_group.pk = None
-        site_group.name = self.group_name_pattern.format(
-            site_id=site.pk, group_id=self.group.pk)
+        site_group.name = Role.group_name_pattern % {
+            'role_name': self.name,
+            'site_domain': site.domain}
         site_group.save()
         site_group.permissions = permissions
         kwargs = self._get_permissions_dict()
@@ -256,8 +262,37 @@ def create_role_groups(instance, **kwargs):
             role.add_site_specific_global_page_perm(site)
 
 
+@receiver(signals.pre_save, sender=Site)
+def attach_old_domain_attr(instance, **kwargs):
+    """Attach a magic attribute named _old_domain that is then used
+    by the update_site_group_names for updating all of the
+    auto generated site groups' names
+    """
+    site = instance
+    try:
+        site._old_domain = Site.objects.get(pk=site.pk).domain
+    except Site.DoesNotExist:
+        pass
+
+
+@receiver(signals.post_save, sender=Site)
+def update_site_group_names(instance, **kwargs):
+    """Update all of the auto generated site groups' names"""
+    site = instance
+    if  hasattr(site, '_old_domain') and site.domain != site._old_domain:
+        for role in Role.objects.all():
+            role.update_site_groups(
+                update_names=True,
+                update_permissions=False)
+
+
 @receiver(signals.pre_delete, sender=Site)
-def set_role_groups_to_delete(instance, **kwargs):
+def attach_role_groups_attr(instance, **kwargs):
+    """Attach a magic attribute amed _role_groups that is then
+    used by delete_role_groups for deleting all of the
+    auto generated site groups that 'belonged' to this site
+    and any role
+    """
     instance._role_groups = []
     for role in Role.objects.all():
         try:
@@ -273,6 +308,9 @@ def set_role_groups_to_delete(instance, **kwargs):
 
 @receiver(signals.post_delete, sender=Site)
 def delete_role_groups(instance, **kwargs):
+    """Delete all of the auto generated site groups that 'belonged' to
+    this site and any role.
+    """
     for site_group in getattr(instance, '_role_groups', []):
         site_group.delete()
 
@@ -288,4 +326,6 @@ def update_site_specific_groups(instance, **kwargs):
     except Role.DoesNotExist:
         return
     else:
-        role.update_site_groups_permissions(update_names=False)
+        role.update_site_groups(
+            update_names=False,
+            update_permissions=True)
