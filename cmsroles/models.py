@@ -3,6 +3,7 @@ from django.contrib.sites.models import Site
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import signals, Q
+from django.dispatch import receiver
 from django.utils.translation import ugettext_lazy as _
 
 from cms.models.permissionmodels import (
@@ -80,19 +81,20 @@ class Role(AbstractPagePermission):
             if query.exists():
                 raise ValidationError(u'A Role for group "%s" already exists' % self.group.name)
 
-    def _update_site_groups_permissions(self):
+    def update_site_groups_permissions(self, update_names):
         new_group_permissions = self.group.permissions.all()
         global_perm_q = self.derived_global_permissions.select_related(
-            'group').prefetch_related('group__permissions')
+            'group')
         site_groups = [global_perm.group for global_perm in global_perm_q]
         for site_group in site_groups:
             # change permissions
             site_group.permissions = new_group_permissions
             # rename group
-            parsed_name = parse(self.group_name_pattern, site_group.name)
-            site_group.name = self.group_name_pattern.format(
-                site_id=parsed_name['site_id'], group_id=self.group.id)
-            site_group.save()
+            if update_names:
+                parsed_name = parse(self.group_name_pattern, site_group.name)
+                site_group.name = self.group_name_pattern.format(
+                    site_id=parsed_name['site_id'], group_id=self.group.id)
+                site_group.save()
 
     def _propagate_perm_changes(self, derived_perms):
         permissions = self._get_permissions_dict()
@@ -108,7 +110,7 @@ class Role(AbstractPagePermission):
             group_changed = (self._old_group is not None and
                              self._old_group != self.group_id)
             if group_changed:
-                self._update_site_groups_permissions()
+                self.update_site_groups_permissions(update_names=True)
 
             # TODO: improve performance by having less queries
             derived_global_permissions = self.derived_global_permissions.all()
@@ -238,6 +240,22 @@ class Role(AbstractPagePermission):
         return self.derived_page_permissions.filter(page__site=site, user=user)
 
 
+@receiver(signals.pre_delete, sender=Group)
+def delete_role(instance, **kwargs):
+    """When group that a role uses gets deleted, that role also
+    and all of the auto generated page permissions and groups
+    also need to be deleted. Whithout this pre_delete signal the
+    role would be deleted, but the deletion would happen without going
+    through the role's delete method
+    """
+    for role in Role.objects.filter(group=instance):
+        # Role.objects.filter(group=instance) should
+        # return 0 or 1 roles objects, unless someone
+        # created role objects without going through .clean
+        role.delete()
+
+
+@receiver(signals.post_save, sender=Site)
 def create_role_groups(instance, **kwargs):
     site = instance
     if kwargs['created']:
@@ -245,6 +263,7 @@ def create_role_groups(instance, **kwargs):
             role.add_site_specific_global_page_perm(site)
 
 
+@receiver(signals.pre_delete, sender=Site)
 def set_role_groups_to_delete(instance, **kwargs):
     instance._role_groups = []
     for role in Role.objects.all():
@@ -259,33 +278,25 @@ def set_role_groups_to_delete(instance, **kwargs):
                 instance._role_groups.append(role_site_group)
 
 
+@receiver(signals.post_delete, sender=Site)
 def delete_role_groups(instance, **kwargs):
     for site_group in getattr(instance, '_role_groups', []):
         site_group.delete()
 
 
+@receiver(signals.m2m_changed, sender=Group.permissions.through)
 def update_site_specific_groups(instance, **kwargs):
     """This signal handler updates all auto generated groups
     that are being managed by a role when the base group on which
     the role is built gets updated
     """
+    action = kwargs['action']
+    if not action.startswith('post_'):
+        return
     group = instance
     try:
         role = Role.objects.get(group=group)
     except Role.DoesNotExist:
         return
     else:
-        derived_global_permissions = role.derived_global_permissions.all()\
-            .select_related('group')
-        derived_groups = [gp.group for gp in derived_global_permissions]
-        permissions = group.permissions.all()
-        for derived_group in derived_groups:
-            derived_group.permissions = permissions
-
-
-signals.post_save.connect(create_role_groups, sender=Site)
-
-signals.pre_delete.connect(set_role_groups_to_delete, sender=Site)
-signals.post_delete.connect(delete_role_groups, sender=Site)
-
-signals.m2m_changed.connect(update_site_specific_groups, sender=Group.permissions.through)
+        role.update_site_groups_permissions(update_names=False)

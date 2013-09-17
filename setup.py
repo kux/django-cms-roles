@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='django-cms-roles',
-    version='0.0.1',
+    version='0.2.0',
     description=('Wrapper over django-cms\' permissions that allows '
                  'for easy user management by defining roles that '
                  'span multiple sites.'),

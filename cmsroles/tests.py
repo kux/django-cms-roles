@@ -11,13 +11,7 @@ from cmsroles.siteadmin import (is_site_admin, get_administered_sites, get_site_
                                 get_site_admin_required_permission)
 
 
-class BasicSiteSetupTest(TestCase):
-
-    def setUp(self):
-        User.objects.create_superuser(
-            username='root', password='root',
-            email='root@roto.com')       
-
+class HelpersMixin(object):
     def _create_site_admin_group(self):
         site_admin_group = Group.objects.create(name='site_admin')
         site_admin_group.permissions.add(get_site_admin_required_permission())
@@ -77,6 +71,9 @@ class BasicSiteSetupTest(TestCase):
         writer_role.grant_to_user(user, foo_site, [master])
         return writer_role, user, foo_site
 
+
+class SiteAdminTests(TestCase, HelpersMixin):
+
     def test_is_admin(self):
         self._create_simple_setup()
         joe = User.objects.get(username='joe')
@@ -125,6 +122,12 @@ class BasicSiteSetupTest(TestCase):
         self.client.login(username='joe', password='x')
         response = self.client.get('/admin/cmsroles/usersetup/')
         self.assertEqual(response.status_code, 403)
+
+
+class ObjectInteractionsTests(TestCase, HelpersMixin):
+    """Test the way Role objects iteract with sites,
+    auto generated groups and global page permissions
+    """
 
     def test_global_page_permission_implicitly_created(self):
         site_admin_group = self._create_site_admin_group()
@@ -306,6 +309,22 @@ class BasicSiteSetupTest(TestCase):
         admin_role = Role.objects.get(name='site admin')
         check_permissions(admin_role, set(p.pk for p in perms))
 
+    def test_delete_group(self):
+        # we should have a site by default
+        self.assertEqual(Site.objects.count(), 1)
+        base_site_admin_group = self._create_site_admin_group()
+        Role.objects.create(name='site admin', group=base_site_admin_group,
+                                         is_site_wide=True)
+        # we have two groups: base_site_admin_group and an auto generated
+        # one for the default site
+        self.assertEqual(Group.objects.count(), 2)
+        base_site_admin_group.delete()
+        # the auto generated one should also be deleted
+        self.assertEqual(Group.objects.count(), 0)
+
+
+class RoleValidationtests(TestCase, HelpersMixin):
+
     def test_role_validation_two_roles_same_group(self):
         Site.objects.create(name='foo.site.com', domain='foo.site.com')
         base_site_admin_group = self._create_site_admin_group()
@@ -325,6 +344,14 @@ class BasicSiteSetupTest(TestCase):
         role_from_derived_group = Role(name='site admin 2', group=derived_group)
         with self.assertRaises(ValidationError):
             role_from_derived_group.clean()
+
+
+class UserSetupFormTests(TestCase, HelpersMixin):
+
+    def setUp(self):
+        User.objects.create_superuser(
+            username='root', password='root',
+            email='root@roto.com')
 
     def _get_foo_site_objs(self):
         foo_site = Site.objects.get(name='foo.site.com', domain='foo.site.com')
@@ -436,3 +463,19 @@ class BasicSiteSetupTest(TestCase):
         self.assertEqual(user_pks_to_role_pks[george.pk], developer.pk)
         self.assertEqual(user_pks_to_role_pks[robin.pk], editor.pk)
         self.assertEqual(user_pks_to_role_pks[criss.pk], admin.pk)
+
+    def test_no_duplicate_groups_in_the_group_admin(self):
+        site_admin_group = self._create_site_admin_group()
+        Role.objects.create(
+            name='site admin', group=site_admin_group,
+            is_site_wide=True)
+        GlobalPagePermission.objects.create(
+            group=site_admin_group)
+        GlobalPagePermission.objects.create(
+            group=site_admin_group)
+        self.client.login(username='root', password='root')
+        response = self.client.get('/admin/auth/group/')
+        displayed_objects = response.context['cl'].result_list
+        # before 'distinct()' was added, ExtendedGroupAdmin.get_filtered_queryset
+        # used to return the same group object multiple times
+        self.assertListEqual(list(displayed_objects), [site_admin_group])
