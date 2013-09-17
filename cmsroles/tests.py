@@ -17,6 +17,13 @@ class HelpersMixin(object):
         site_admin_group.permissions.add(get_site_admin_required_permission())
         return site_admin_group
 
+    def _create_pages(self, site):
+        master = create_page('master', 'template.html', language='en', site=site)
+        news_page = create_page('news', 'template.html', language='en', site=site, parent=master)
+        create_page('something happend', 'template.html', language='en', site=site, parent=news_page)
+        create_page('blog', 'template.html', language='en', site=site, parent=master)
+        return  master
+
     def _create_simple_setup(self):
         """Creates two sites, three roles and five users that have
         different foles within the two sites.
@@ -57,7 +64,7 @@ class HelpersMixin(object):
         vasile = User.objects.create(username='vasile', is_staff=True)
         editor_role.grant_to_user(vasile, bar_site)
         bob = User.objects.create(username='bob', is_staff=True)
-        master = create_page('master', 'template.html', language='en', site=bar_site)
+        master = self._create_pages(bar_site)
         writer_role.grant_to_user(bob, bar_site, [master])
 
     def _create_non_site_wide_role(self):
@@ -363,7 +370,7 @@ class UserSetupFormTests(TestCase, HelpersMixin):
         editor = Role.objects.get(name='editor')
         return foo_site, joe, admin, george, developer, robin, editor
 
-    def test_user_formset_submit_change_roles(self):
+    def test_change_roles(self):
         self._create_simple_setup()
         # users assigned to foo.site.com:
         # joe: site admin, george: developer, robin: editor
@@ -396,7 +403,7 @@ class UserSetupFormTests(TestCase, HelpersMixin):
         self.assertEqual(user_pks_to_role_pks[george.pk], editor.pk)
         self.assertEqual(user_pks_to_role_pks[robin.pk], editor.pk)
 
-    def test_user_formset_submit_unassign_user(self):
+    def test_unassign_user(self):
         self._create_simple_setup()
         # users assigned to foo.site.com:
         # joe: site admin, george: developer, robin: editor
@@ -425,7 +432,7 @@ class UserSetupFormTests(TestCase, HelpersMixin):
         self.assertEqual(user_pks_to_role_pks[joe.pk], admin.pk)
         self.assertEqual(user_pks_to_role_pks[george.pk], developer.pk)
 
-    def test_user_formset_submit_assign_new_user(self):
+    def test_assign_new_user(self):
         self._create_simple_setup()
         # users assigned to foo.site.com:
         # joe: site admin, george: developer, robin: editor
