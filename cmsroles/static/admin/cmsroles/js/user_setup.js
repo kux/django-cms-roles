@@ -80,7 +80,7 @@ django.jQuery(document).ready(function(){
         }
     })
 
-    function fetch_pages(user_settings, success_hook){
+    function fetch_pages(user_settings, hooks){
         var user_role_pair = get_user_and_role(user_settings);
         $.ajax({
             type: 'GET',
@@ -90,11 +90,14 @@ django.jQuery(document).ready(function(){
                 'role': user_role_pair.role.val(),
             },
             success: function(data, textStatus){
-                success_hook();
+                hooks.success_hook();
                 user_settings.append(data.page_formset);
                 init_page_formset(user_settings);
                 $('.page_form select', user_settings).chosen(
                     default_chosen_settings);
+            },
+            error: function(data, textStatus){
+                hooks.error_hook();
             }
         });
     }
@@ -105,9 +108,16 @@ django.jQuery(document).ready(function(){
         var user_settings = $(this).parent('.user_settings');
         var waiting_pages = $('.waiting-pages', user_settings);
         waiting_pages.css('visibility', 'visible');
-        fetch_pages(user_settings, function(){
-            assign_pages_link.hide();
-            waiting_pages.css('visibility', 'hidden');
+        fetch_pages(user_settings, {
+            success_hook: function(){
+                assign_pages_link.hide();
+                waiting_pages.css('visibility', 'hidden');
+            },
+            error_hook: function(){
+                assign_pages_link.show();
+                waiting_pages.css('visibility', 'hidden');
+                alert('Unexpected error!');
+            }
         });
     });
 
@@ -124,12 +134,19 @@ django.jQuery(document).ready(function(){
         var user_settings = $(this).parents('.user_settings');
         if (is_site_wide){
             remove_page_formset(user_settings);
-            $('.assign-pages').hide();
+            $('.assign-pages', user_settings).hide();
         }else{
             var waiting_icon = $('.waiting-change', user_settings);
             waiting_icon.css('visibility', 'visible');
-            fetch_pages(user_settings, function(){
-                waiting_icon.css('visibility', 'hidden');
+            fetch_pages(user_settings, {
+                success_hook: function(){
+                    waiting_icon.css('visibility', 'hidden');
+                },
+                error_hook: function(){
+                    $('.assign-pages', user_settings).show();
+                    waiting_icon.css('visibility', 'hidden');
+                    alert('Unexpected error');
+                }
             });
         }
     });
@@ -144,9 +161,15 @@ django.jQuery(document).ready(function(){
             var assign_pages_link = $('.assign-pages', user_settings);
             var waiting_icon = $('.waiting-change', user_settings);
             waiting_icon.css('visibility', 'visible');
-            fetch_pages(user_settings, function(){
-                assign_pages_link.hide();
-                waiting_icon.css('visibility', 'hidden');
+            fetch_pages(user_settings, {
+                success_hook: function(){
+                    assign_pages_link.hide();
+                    waiting_icon.css('visibility', 'hidden');
+                },
+                error_hook: function(){
+                    waiting_icon.css('visibility', 'hidden');
+                    alert('Unexpected error');
+                }
             });
         }
     });
