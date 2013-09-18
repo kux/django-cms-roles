@@ -69,16 +69,17 @@ class HelpersMixin(object):
         master = self._create_pages(bar_site)
         writer_role.grant_to_user(bob, bar_site, [master])
 
+    def _create_site_with_page(self, domain):
+        site = Site.objects.create(name='foo.site.com', domain='foo.site.com')
+        create_page('master', 'cms_mock_template.html', language='en', site=site)
+        return site
+
     def _create_non_site_wide_role(self):
         writer_group = Group.objects.create(name='writer')
         writer_role = Role.objects.create(
             name='writer', group=writer_group, is_site_wide=False,
             can_add=False)
-        foo_site = Site.objects.create(name='foo.site.com', domain='foo.site.com')
-        user = User.objects.create(username='gigi', is_staff=True)
-        master = create_page('master', 'cms_mock_template.html', language='en', site=foo_site)
-        writer_role.grant_to_user(user, foo_site, [master])
-        return writer_role, user, foo_site
+        return writer_role
 
 
 class SiteAdminTests(TestCase, HelpersMixin):
@@ -160,14 +161,24 @@ class ObjectInteractionsTests(TestCase, HelpersMixin):
                              set(site_admin_group.permissions.all()))
 
     def test_assign_user_to_non_site_wide_role(self):
-        writer_role, user, foo_site = self._create_non_site_wide_role()
+        writer_role = self._create_non_site_wide_role()
+        foo_site = self._create_site_with_page('foo.site.com')
+        user = User.objects.create(username='gigi', is_staff=True)
+        master_page = Page.objects.get(title_set__title='master')
+        writer_role.grant_to_user(user, foo_site, [master_page])
+
         page_perms = PagePermission.objects.filter(user=user)
         self.assertEqual(len(page_perms), 1)
         users = writer_role.users(foo_site)
         self.assertItemsEqual([u.pk for u in users], [user.pk])
 
     def test_switch_role_form_site_wide_to_non_wide(self):
-        writer_role, user, foo_site = self._create_non_site_wide_role()
+        writer_role = self._create_non_site_wide_role()
+        foo_site = self._create_site_with_page('foo.site.com')
+        user = User.objects.create(username='gigi', is_staff=True)
+        master_page = Page.objects.get(title_set__title='master')
+        writer_role.grant_to_user(user, foo_site, [master_page])
+
         writer_role.is_site_wide = True
         writer_role.save()
         self.assertFalse(writer_role.derived_page_permissions.exists())
@@ -245,11 +256,49 @@ class ObjectInteractionsTests(TestCase, HelpersMixin):
         admin_role = Role.objects.create(name='site admin', group=base_site_admin_group,
                                          is_site_wide=True)
         generated_group = admin_role.get_site_specific_group(foo_site)
-        self.assertEqual(generated_group.name, Role.group_name_pattern.format(
-            site_id=foo_site.pk, group_id=base_site_admin_group.pk))
+        self.assertEqual(generated_group.name, Role.group_name_pattern % {
+                'role_name': admin_role.name,
+                'site_domain': foo_site.domain})
         generated_group = admin_role.get_site_specific_group(bar_site)
-        self.assertEqual(generated_group.name, Role.group_name_pattern.format(
-            site_id=bar_site.pk, group_id=base_site_admin_group.pk))
+        self.assertEqual(generated_group.name, Role.group_name_pattern % {
+                'role_name': admin_role.name,
+                'site_domain': bar_site.domain})
+
+    def test_generated_group_names_on_role_name_change(self):
+        foo_site = Site.objects.create(name='foo.site.com', domain='foo.site.com')
+        base_site_admin_group = self._create_site_admin_group()
+        admin_role = Role.objects.create(name='site admin', group=base_site_admin_group,
+                                         is_site_wide=True)
+        generated_group = admin_role.get_site_specific_group(foo_site)
+        self.assertEqual(generated_group.name, Role.group_name_pattern % {
+                'role_name': admin_role.name,
+                'site_domain': foo_site.domain})
+        admin_role.name = 'new site admin'
+        admin_role.save()
+        # re-fetch the generated group
+        generated_group = admin_role.get_site_specific_group(foo_site)
+        # and test that the generated group name is still in sync with the role name
+        self.assertEqual(generated_group.name, Role.group_name_pattern % {
+                'role_name': admin_role.name,
+                'site_domain': foo_site.domain})
+
+    def test_generated_group_names_on_site_domain_change(self):
+        foo_site = Site.objects.create(name='foo.site.com', domain='foo.site.com')
+        base_site_admin_group = self._create_site_admin_group()
+        admin_role = Role.objects.create(name='site admin', group=base_site_admin_group,
+                                         is_site_wide=True)
+        generated_group = admin_role.get_site_specific_group(foo_site)
+        self.assertEqual(generated_group.name, Role.group_name_pattern % {
+                'role_name': admin_role.name,
+                'site_domain': foo_site.domain})
+        foo_site.domain = 'zanewfoo.com'
+        foo_site.save()
+        # re-fetch the generated group
+        generated_group = admin_role.get_site_specific_group(foo_site)
+        # and test that the generated group name is still in sync with the site domain
+        self.assertEqual(generated_group.name, Role.group_name_pattern % {
+                'role_name': admin_role.name,
+                'site_domain': foo_site.domain})
 
     def test_site_group_perms_change_on_role_group_change(self):
         foo_site = Site.objects.create(
@@ -283,7 +332,12 @@ class ObjectInteractionsTests(TestCase, HelpersMixin):
             self.assertEqual(gp.can_add, developer_role.can_add)
 
     def test_changes_in_role_relected_in_page_perms(self):
-        writer_role, _, _ = self._create_non_site_wide_role()
+        writer_role = self._create_non_site_wide_role()
+        foo_site = self._create_site_with_page('foo.site.com')
+        user = User.objects.create(username='gigi', is_staff=True)
+        master_page = Page.objects.get(title_set__title='master')
+        writer_role.grant_to_user(user, foo_site, [master_page])
+
         self.assertEqual(writer_role.derived_page_permissions.count(), 1)
         for page_perm in writer_role.derived_page_permissions.all():
             self.assertFalse(page_perm.can_add)
@@ -330,6 +384,30 @@ class ObjectInteractionsTests(TestCase, HelpersMixin):
         base_site_admin_group.delete()
         # the auto generated one should also be deleted
         self.assertEqual(Group.objects.count(), 0)
+
+    def test_ungrant_non_site_wide_role(self):
+        foo_site = self._create_site_with_page('foo.site.com')
+        bar_site = self._create_site_with_page('bar.site.com')
+        writer_role = self._create_non_site_wide_role()
+        user = User.objects.create(username='gigi', is_staff=True)
+        master_foo = Page.objects.get(title_set__title='master', site=foo_site)
+        master_bar = Page.objects.get(title_set__title='master', site=bar_site)
+        writer_role.grant_to_user(user, foo_site, [master_foo])
+        writer_role.grant_to_user(user, bar_site, [master_bar])
+
+        users = writer_role.users(foo_site)
+        self.assertItemsEqual([u.pk for u in users], [user.pk])
+        users = writer_role.users(bar_site)
+        self.assertItemsEqual([u.pk for u in users], [user.pk])
+
+        writer_role.ungrant_from_user(user, foo_site)
+
+        users = writer_role.users(foo_site)
+        # no longer assigned to foo
+        self.assertItemsEqual([u.pk for u in users], [])
+        users = writer_role.users(bar_site)
+        # but is still assigned to bar
+        self.assertItemsEqual([u.pk for u in users], [user.pk])
 
 
 class RoleValidationTests(TestCase, HelpersMixin):
