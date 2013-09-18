@@ -18,7 +18,7 @@ INSTALLED_APPS = [
 ]
 
 TEST_RUNNER = 'django_nose.NoseTestSuiteRunner'
-CMS_TEMPLATES = [('template.html', 'template.html')]
+CMS_TEMPLATES = [('cms_mock_template.html', 'cms_mock_template.html')]
 CMS_MODERATOR = True
 CMS_PERMISSION = True
 STATIC_ROOT = '/static/'
@@ -56,6 +56,8 @@ MIDDLEWARE_CLASSES = (
 )
 TEMPLATE_LOADERS = (
     'cmsroles.test_utils.MockLoader',
+    'django.template.loaders.filesystem.Loader',
+    'django.template.loaders.app_directories.Loader',
     )
 CACHE_BACKEND = 'locmem:///'
 

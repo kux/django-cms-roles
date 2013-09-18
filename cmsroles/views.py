@@ -119,7 +119,7 @@ def _get_site_pk(request):
     return site_pk
 
 
-def _update_site_users(current_site, assigned_users, submitted_users, user_pages):
+def _update_site_users(site, assigned_users, submitted_users, user_pages):
     newly_assigned_users = {}
     existing_users = {}
     for user, role in submitted_users.iteritems():
@@ -132,26 +132,17 @@ def _update_site_users(current_site, assigned_users, submitted_users, user_pages
         (user, role) for user, role in assigned_users.iteritems()
         if user not in existing_users.keys())
 
-    def get_pages_to_assign(user, role):
-        if role.is_site_wide:
-            return None
-        existing_pages = [
-            perm.page for perm in role.get_user_page_perms(user, current_site)]
-        pages = user_pages.get(user, None)
-        if pages is None:
-            pages = existing_pages
-        return pages
-
     for user, role in unassigned_users.iteritems():
-        role.ungrant_from_user(user, current_site)
+        role.ungrant_from_user(user, site)
     for user, role in newly_assigned_users.iteritems():
-        pages = get_pages_to_assign(user, role)
-        role.grant_to_user(user, current_site, pages)
+        pages = user_pages.get(user, None)
+        role.grant_to_user(user, site, pages)
     for user, new_role in existing_users.iteritems():
         previous_role = assigned_users[user]
-        pages = get_pages_to_assign(user, new_role)
-        previous_role.ungrant_from_user(user, current_site)
-        new_role.grant_to_user(user, current_site, pages)
+        pages = user_pages.get(user, None)
+        if previous_role != new_role or pages is not None:
+            previous_role.ungrant_from_user(user, site)
+            new_role.grant_to_user(user, site, pages)
 
 
 def _get_user_pages(page_formset):
@@ -174,6 +165,15 @@ def _get_redirect(request, site_pk):
     else:
         return HttpResponseRedirect('/admin/')
 
+def _get_page_form_class(current_site):
+
+    class PageForm(forms.Form):
+        page = TreeNodeChoiceField(
+            queryset=Page.objects.filter(site=current_site),
+            required=False)
+
+    return PageForm
+
 
 @user_passes_test(is_site_admin, login_url='/admin/')
 def get_page_formset(request):
@@ -187,13 +187,9 @@ def get_page_formset(request):
     """
     site_pk = _get_site_pk(request)
     current_site, administered_sites = _get_user_sites(request.user, site_pk)
-
-    class PageForm(forms.Form):
-        page = TreeNodeChoiceField(
-            queryset=Page.objects.filter(site=current_site),
-            required=False)
-
-    PageFormSet = formset_factory(PageForm, formset=BasePageFormSet, extra=1)
+    PageFormSet = formset_factory(
+        _get_page_form_class(current_site),
+        formset=BasePageFormSet, extra=1)
     user_pk = request.GET.get('user')
     role_pk = request.GET.get('role')
     role = Role.objects.get(pk=role_pk)
@@ -227,12 +223,9 @@ def user_setup(request):
     current_site, administered_sites = _get_user_sites(request.user, site_pk)
     UserFormSet = formset_factory(UserForm, formset=BaseUserFormSet, extra=1)
     assigned_users = get_site_users(current_site)
-
-    class PageForm(forms.Form):
-        page = TreeNodeChoiceField(
-            queryset=Page.objects.filter(site=current_site),
-            required=False)
-    PageFormSet = formset_factory(PageForm, formset=BasePageFormSet, extra=1)
+    PageFormSet = formset_factory(
+        _get_page_form_class(current_site),
+        formset=BasePageFormSet, extra=1)
     page_formsets = {}
     if request.method == 'POST':
         user_formset = UserFormSet(request.POST, request.FILES,
