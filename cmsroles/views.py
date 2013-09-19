@@ -196,6 +196,8 @@ def get_page_formset(request):
     upfront.
     """
     site_pk = _get_site_pk(request)
+    # this is requred for making sure the pages formset is properly built
+    assert site_pk is not None
     current_site, administered_sites = _get_user_sites(request.user, site_pk)
     PageFormSet = formset_factory(
         _get_page_form_class(current_site),

@@ -82,12 +82,14 @@ django.jQuery(document).ready(function(){
 
     function fetch_pages(user_settings, hooks){
         var user_role_pair = get_user_and_role(user_settings);
+        var current_site = $('#site_selector').find(":selected").val()
         $.ajax({
             type: 'GET',
             url: '/admin/cmsroles/get_page_formset/',
             data: {
                 'user': user_role_pair.user.val(),
                 'role': user_role_pair.role.val(),
+                'site': current_site
             },
             success: function(data, textStatus){
                 if (data.success){

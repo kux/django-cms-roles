@@ -652,7 +652,8 @@ class ViewsTests(TestCase, HelpersMixin):
         response = self.client.get(
             '/admin/cmsroles/get_page_formset/?site=%s' % bar_site.pk, {
                 u'user': bob.pk,
-                u'role': writer.pk}
+                u'role': writer.pk,
+                u'site': bar_site.pk}
             )
         content = simplejson.loads(response.content)
         page_formset = content[u'page_formset']
