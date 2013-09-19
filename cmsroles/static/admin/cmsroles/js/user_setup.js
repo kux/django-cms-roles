@@ -8,6 +8,7 @@ django.jQuery(document).ready(function(){
         deleteText: '',
         added: function(row){
             $('select', row).chosen(default_chosen_settings);
+            $('.assign-pages', row).hide();
         },
     });
 
