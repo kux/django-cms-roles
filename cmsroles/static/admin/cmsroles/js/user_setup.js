@@ -141,6 +141,11 @@ django.jQuery(document).ready(function(){
         var selected_role = $(this).val();
         var is_site_wide = document.roles[selected_role];
         var user_settings = $(this).parents('.user_settings');
+        var user_role_pair = get_user_and_role(user_settings);
+        if  (user_role_pair.user.val() === ""){
+            return
+        }
+
         if (is_site_wide){
             remove_page_formset(user_settings);
             $('.assign-pages', user_settings).hide();
@@ -167,7 +172,7 @@ django.jQuery(document).ready(function(){
         var user_role_pair = get_user_and_role(user_settings);
         var role = user_role_pair.role.val();
         var is_site_wide = document.roles[role];
-        if (!is_site_wide && role != ""){
+        if (!is_site_wide && role !== ""){
             remove_page_formset(user_settings);
             var assign_pages_link = $('.assign-pages', user_settings);
             var waiting_icon = $('.waiting-change', user_settings);
