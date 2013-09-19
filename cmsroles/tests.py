@@ -172,7 +172,7 @@ class ObjectInteractionsTests(TestCase, HelpersMixin):
         users = writer_role.users(foo_site)
         self.assertItemsEqual([u.pk for u in users], [user.pk])
 
-    def test_switch_role_form_site_wide_to_non_wide(self):
+    def test_switch_role_form_non_wide_to_site_wide(self):
         writer_role = self._create_non_site_wide_role()
         foo_site = self._create_site_with_page('foo.site.com')
         user = User.objects.create(username='gigi', is_staff=True)
@@ -186,6 +186,23 @@ class ObjectInteractionsTests(TestCase, HelpersMixin):
         users = writer_role.users(foo_site)
         self.assertItemsEqual([u.pk for u in users], [user.pk])
         self.assertTrue(writer_role.derived_global_permissions.filter(group__user=user).exists())
+
+    def test_switch_role_form_site_wide_to_non_wide(self):
+        base_site_admin_group = self._create_site_admin_group()
+        admin_role = Role.objects.create(
+            name='site admin', group=base_site_admin_group,
+            is_site_wide=True)
+        foo_site = self._create_site_with_page('foo.site.com')
+        user = User.objects.create(username='gigi', is_staff=True)
+        admin_role.grant_to_user(user, foo_site)
+
+        admin_role.is_site_wide = False
+        admin_role.save()
+        self.assertTrue(admin_role.derived_page_permissions.exists())
+        self.assertFalse(admin_role.derived_global_permissions.exists())
+        users = admin_role.users(foo_site)
+        self.assertItemsEqual([u.pk for u in users], [user.pk])
+        self.assertTrue(admin_role.derived_page_permissions.filter(user=user).exists())
 
     def test_cant_create_two_roles_based_on_the_same_group(self):
         site_admin_group = self._create_site_admin_group()

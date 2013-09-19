@@ -90,14 +90,21 @@ django.jQuery(document).ready(function(){
                 'role': user_role_pair.role.val(),
             },
             success: function(data, textStatus){
-                hooks.success_hook();
-                user_settings.append(data.page_formset);
-                init_page_formset(user_settings);
-                $('.page_form select', user_settings).chosen(
-                    default_chosen_settings);
+                if (data.success){
+                    hooks.success_hook();
+                    user_settings.append(data.page_formset);
+                    init_page_formset(user_settings);
+                    $('.page_form select', user_settings).chosen(
+                        default_chosen_settings);
+                } else {
+                    //Even tough the ajax call was a sucess (200 status code),
+                    //a known error might have happend
+                    alert(data.error_msg);
+                    hooks.error_hook(false);
+                }
             },
             error: function(data, textStatus){
-                hooks.error_hook();
+                hooks.error_hook(true);
             }
         });
     }
@@ -113,10 +120,12 @@ django.jQuery(document).ready(function(){
                 assign_pages_link.hide();
                 waiting_pages.css('visibility', 'hidden');
             },
-            error_hook: function(){
+            error_hook: function(is_unexpected){
                 assign_pages_link.show();
                 waiting_pages.css('visibility', 'hidden');
-                alert('Unexpected error!');
+                if (is_unexpected){
+                    alert('Unexpected error!');
+                }
             }
         });
     });
@@ -142,10 +151,12 @@ django.jQuery(document).ready(function(){
                 success_hook: function(){
                     waiting_icon.css('visibility', 'hidden');
                 },
-                error_hook: function(){
+                error_hook: function(is_unexpected){
                     $('.assign-pages', user_settings).show();
                     waiting_icon.css('visibility', 'hidden');
-                    alert('Unexpected error');
+                    if (is_unexpected){
+                        alert('Unexpected error');
+                    }
                 }
             });
         }
@@ -166,9 +177,11 @@ django.jQuery(document).ready(function(){
                     assign_pages_link.hide();
                     waiting_icon.css('visibility', 'hidden');
                 },
-                error_hook: function(){
+                error_hook: function(is_unexpected){
                     waiting_icon.css('visibility', 'hidden');
-                    alert('Unexpected error');
+                    if (is_unexpected){
+                        alert('Unexpected error');
+                    }
                 }
             });
         }

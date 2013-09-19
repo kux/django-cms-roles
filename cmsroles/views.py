@@ -1,3 +1,4 @@
+from django.contrib import messages
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.models import User
 from django.contrib.sites.models import Site
@@ -119,7 +120,7 @@ def _get_site_pk(request):
     return site_pk
 
 
-def _update_site_users(site, assigned_users, submitted_users, user_pages):
+def _update_site_users(request, site, assigned_users, submitted_users, user_pages):
     newly_assigned_users = {}
     existing_users = {}
     for user, role in submitted_users.iteritems():
@@ -136,7 +137,16 @@ def _update_site_users(site, assigned_users, submitted_users, user_pages):
         role.ungrant_from_user(user, site)
     for user, role in newly_assigned_users.iteritems():
         pages = user_pages.get(user, None)
-        role.grant_to_user(user, site, pages)
+        if not role.is_site_wide and pages is None:
+            # this is very unlikely but can happen if someone changes the role
+            # between the moment user setup page is rendered and the moment
+            # the forms are submitted
+            messages.error(
+                request, "Role %s got changed and is no longer site wide. "
+                "User %s didn't get the role because "
+                "no pages were submitted. Try again" % (user, role))
+        else:
+            role.grant_to_user(user, site, pages)
     for user, new_role in existing_users.iteritems():
         previous_role = assigned_users[user]
         pages = user_pages.get(user, None)
@@ -195,7 +205,12 @@ def get_page_formset(request):
     role = Role.objects.get(pk=role_pk)
     user = User.objects.get(pk=user_pk)
     if role.is_site_wide:
-        return ''  # someone changed the role into being site wide the meanwhile
+        return HttpResponse(simplejson.dumps({
+                    'success': False,
+                    'error_msg': 'This role was changed to being site '\
+                        'wide in the meanwhile. The assign pages link is '\
+                        'obsolete'}),
+                            content_type="application/json")
     page_perms = role.get_user_page_perms(user, current_site)
     page_formset = PageFormSet(
         initial=[{'page': page_perm.page} for page_perm in page_perms],
@@ -203,7 +218,8 @@ def get_page_formset(request):
     rendered_formset = loader.get_template(
         'admin/cmsroles/page_formset.html').render(
         Context({'page_formset': page_formset}))
-    response = {'page_formset': rendered_formset}
+    response = {'page_formset': rendered_formset,
+                'success': True}
     return HttpResponse(simplejson.dumps(response),
                         content_type="application/json")
 
@@ -250,7 +266,8 @@ def user_setup(request):
                         page_formsets[unicode(user.pk)] = page_formset
                         page_formsets_have_errors = True
             if not page_formsets_have_errors:
-                _update_site_users(current_site, assigned_users, submitted_users, user_pages)
+                _update_site_users(request, current_site, assigned_users,
+                                   submitted_users, user_pages)
                 return _get_redirect(request, site_pk)
 
     else:

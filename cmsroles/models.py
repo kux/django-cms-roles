@@ -9,6 +9,10 @@ from django.utils.translation import ugettext_lazy as _
 from cms.models.permissionmodels import (
     AbstractPagePermission, GlobalPagePermission, PagePermission)
 from cms.models import ACCESS_PAGE_AND_DESCENDANTS
+from cms.models.pagemodel import Page
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 def get_permission_fields():
@@ -35,8 +39,9 @@ class Role(AbstractPagePermission):
     When is_site_wide is True the role will maintain derived_global_permissions
     When is_site_wide is False this role will maintain derived_page_permissions
 
-    A class invariant is that one of derived_global_permissions and
-    derived_page_permissions must be empty at all times
+    Invariants:
+    * one of derived_page_permissions or derived_global_permissions
+      must always be empty
     """
 
     class Meta:
@@ -131,15 +136,24 @@ class Role(AbstractPagePermission):
                     page_perm.delete()
             else:
                 for global_page_perm in self.derived_global_permissions.all():
-                    # there should be exactly one site, uness someone
-                    # manually fiddled with it
-                    try:
-                        site = global_page_perm.sites.all()[0]
-                    except IndexError:
+                    sites = global_page_perm.sites.all()
+                    if len(sites) != 1:
+                        logger.error(u'Auto generated global page permission was fiddled')
                         continue
+                    site = sites[0]
+                    users = global_page_perm.group.user_set.all()
+                    try:
+                        first_page = Page.objects.filter(site=site)\
+                            .order_by('tree_id', 'lft')[0]
+                    except IndexError:
+                        if len(users) > 0:
+                            users_str = ', '.join(list(users))
+                            logger.error(u'Users %s lost role %s on site %s after '
+                                           'making the site non site wide' % (
+                                    users_str, self.name, site.domain))
                     else:
-                        for user in global_page_perm.group.user_set.all():
-                            self.grant_to_user(user, site)
+                        for user in users:
+                            self.grant_to_user(user, site, [first_page])
                     global_page_perm.group.delete()
 
     def delete(self, *args, **kwargs):
@@ -176,7 +190,7 @@ class Role(AbstractPagePermission):
         if self.is_site_wide:
             user.groups.add(self.get_site_specific_group(site))
         else:
-            if pages is None:
+            if pages is None or len(pages) == 0:
                 raise ValidationError('At lest a page must be given')
             # delete the existing page perms
             self.get_user_page_perms(user, site).delete()
