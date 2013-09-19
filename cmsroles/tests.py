@@ -66,8 +66,9 @@ class HelpersMixin(object):
         vasile = User.objects.create(username='vasile', is_staff=True)
         editor_role.grant_to_user(vasile, bar_site)
         bob = User.objects.create(username='bob', is_staff=True)
-        master = self._create_pages(bar_site)
-        writer_role.grant_to_user(bob, bar_site, [master])
+        master_bar = self._create_pages(bar_site)
+        self._create_pages(foo_site)
+        writer_role.grant_to_user(bob, bar_site, [master_bar])
 
     def _create_site_with_page(self, domain):
         site = Site.objects.create(name='foo.site.com', domain='foo.site.com')
@@ -93,12 +94,14 @@ class SiteAdminTests(TestCase, HelpersMixin):
         self._create_simple_setup()
         joe = User.objects.get(username='joe')
         administered_sites = get_administered_sites(joe)
-        self.assertEquals(set([s.domain for s in administered_sites]),
-                          set(['foo.site.com', 'bar.site.com']))
+        self.assertItemsEqual(
+            [s.domain for s in administered_sites],
+            ['foo.site.com', 'bar.site.com'])
         jack = User.objects.get(username='jack')
         administered_sites = get_administered_sites(jack)
-        self.assertEquals([s.domain for s in administered_sites],
-                          ['bar.site.com'])
+        self.assertItemsEqual(
+            [s.domain for s in administered_sites],
+            ['bar.site.com'])
 
     def test_get_administered_sites_with_user_referencing_glob_page_(self):
         foo_site = Site.objects.create(name='foo.site.com', domain='foo.site.com')
@@ -110,7 +113,9 @@ class SiteAdminTests(TestCase, HelpersMixin):
         gpp.sites.add(foo_site)
         administered_sites = get_administered_sites(admin_user)
         self.assertEquals(len(administered_sites), 1)
-        self.assertEquals([s.pk for s in administered_sites], [foo_site.pk])
+        self.assertItemsEqual(
+            [s.pk for s in administered_sites],
+            [foo_site.pk])
 
     def test_not_accessible_for_non_siteadmins(self):
         joe = User.objects.create_user(
@@ -164,7 +169,9 @@ class ObjectInteractionsTests(TestCase, HelpersMixin):
         writer_role = self._create_non_site_wide_role()
         foo_site = self._create_site_with_page('foo.site.com')
         user = User.objects.create(username='gigi', is_staff=True)
-        master_page = Page.objects.get(title_set__title='master')
+        master_page = Page.objects.get(
+            title_set__title='master',
+            site=foo_site)
         writer_role.grant_to_user(user, foo_site, [master_page])
 
         page_perms = PagePermission.objects.filter(user=user)
@@ -176,7 +183,9 @@ class ObjectInteractionsTests(TestCase, HelpersMixin):
         writer_role = self._create_non_site_wide_role()
         foo_site = self._create_site_with_page('foo.site.com')
         user = User.objects.create(username='gigi', is_staff=True)
-        master_page = Page.objects.get(title_set__title='master')
+        master_page = Page.objects.get(
+            title_set__title='master',
+            site=foo_site)
         writer_role.grant_to_user(user, foo_site, [master_page])
 
         writer_role.is_site_wide = True
@@ -352,7 +361,9 @@ class ObjectInteractionsTests(TestCase, HelpersMixin):
         writer_role = self._create_non_site_wide_role()
         foo_site = self._create_site_with_page('foo.site.com')
         user = User.objects.create(username='gigi', is_staff=True)
-        master_page = Page.objects.get(title_set__title='master')
+        master_page = Page.objects.get(
+            title_set__title='master',
+            site=foo_site)
         writer_role.grant_to_user(user, foo_site, [master_page])
 
         self.assertEqual(writer_role.derived_page_permissions.count(), 1)
@@ -425,6 +436,33 @@ class ObjectInteractionsTests(TestCase, HelpersMixin):
         users = writer_role.users(bar_site)
         # but is still assigned to bar
         self.assertItemsEqual([u.pk for u in users], [user.pk])
+
+    def test_user_belonging_to_more_sites(self):
+        """This tests proper functioning of the unassignment
+        of a role in the scenario:
+
+        * user bob has writer_role on both foo_site and bar_site
+        * user bob has a custom built PagePermssion (not managed
+          through the writer_role)
+          """
+        self._create_simple_setup()
+        foo_site = Site.objects.get(domain='foo.site.com')
+        bar_site = Site.objects.get(domain='bar.site.com')
+        writer_role = Role.objects.get(name='writer')
+        bob = User.objects.get(username='bob')
+        foo_master_page = Page.objects.get(
+            title_set__title='master',
+            site=foo_site)
+        writer_role.grant_to_user(bob, foo_site, [foo_master_page])
+        news_page = Page.objects.get(
+            title_set__title='news',
+            parent=foo_master_page)
+        PagePermission.objects.create(user=bob, page=news_page)
+        writer_role.ungrant_from_user(bob, foo_site)
+        writer_users = writer_role.users(foo_site)
+        self.assertNotIn(bob, writer_users)
+        writer_users = writer_role.users(bar_site)
+        self.assertIn(bob, writer_users)
 
 
 class RoleValidationTests(TestCase, HelpersMixin):

@@ -233,15 +233,14 @@ class Role(AbstractPagePermission):
         """Returnes all users having this role in the given site."""
         if self.is_site_wide:
             global_page_perm = self.derived_global_permissions.filter(sites=site)
-            qs = User.objects.filter(groups__globalpagepermission=global_page_perm)
+            users = list(
+                User.objects.filter(groups__globalpagepermission=global_page_perm))
         else:
-            # we also return users that have page permissions that are
-            # not being managed by this role object. This would be the
-            # case if someone created page permissions without
-            # going through user setup
-            qs = User.objects.filter(
-                pagepermission__page__site=site, groups=self.group)
-        return qs.distinct()
+            page_perms = self.derived_page_permissions.filter(
+                page__site=site).select_related('user')
+            users = set(perm.user for perm in page_perms if perm.user is not None)
+            users = list(users)
+        return users
 
     def get_site_specific_group(self, site):
         # TODO: enforce there is one global page perm per site
