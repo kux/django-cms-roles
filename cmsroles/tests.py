@@ -3,6 +3,7 @@ from django.contrib.auth.models import User, Group, Permission
 from django.contrib.sites.models import Site
 from django.core.exceptions import ValidationError
 from django.utils import simplejson
+from django.core.management import call_command
 
 from cms.models.permissionmodels import GlobalPagePermission, PagePermission
 from cms.models.pagemodel import Page
@@ -11,6 +12,7 @@ from cms.api import create_page
 from cmsroles.models import Role
 from cmsroles.siteadmin import (is_site_admin, get_administered_sites, get_site_users,
                                 get_site_admin_required_permission)
+import cmsroles.management.commands.manage_page_permissions as manage_page_permissions
 
 
 class HelpersMixin(object):
@@ -717,3 +719,41 @@ class ViewsTests(TestCase, HelpersMixin):
         # used to return the same group object multiple times
         self.assertListEqual(list(displayed_objects), [site_admin_group])
 
+
+class ManagePagePermissionsCommandTests(TestCase, HelpersMixin):
+
+    def test_site_already_writer_on(self):
+        self._create_simple_setup()
+        bar_site = Site.objects.get(domain='bar.site.com')
+        writer_role = Role.objects.get(name='writer')
+        bob = User.objects.get(username='bob')
+        bar_news = Page.objects.get(title_set__title='news', site=bar_site)
+        unmanaged_perm = PagePermission.objects.create(user=bob, page=bar_news)
+        call_command('manage_page_permissions', role='writer')
+        self.assertIn(unmanaged_perm, writer_role.derived_page_permissions.all())
+
+    def test_site_not_writer_on(self):
+        self._create_simple_setup()
+        foo_site = Site.objects.get(domain='foo.site.com')
+        writer_role = Role.objects.get(name='writer')
+        bob = User.objects.get(username='bob')
+        foo_news = Page.objects.get(title_set__title='news', site=foo_site)
+        unmanaged_perm = PagePermission.objects.create(user=bob, page=foo_news)
+        call_command('manage_page_permissions', role='writer')
+        self.assertIn(unmanaged_perm, writer_role.derived_page_permissions.all())
+        self.assertIn(bob, writer_role.users(foo_site))
+
+    def test_on_site_already_having_other_role(self):
+        self._create_simple_setup()
+        foo_site = Site.objects.get(domain='foo.site.com')
+        bob = User.objects.get(username='bob')
+        writer_role = Role.objects.get(name='writer')
+        admin_role = Role.objects.get(name='site admin')
+        admin_role.grant_to_user(bob, foo_site)
+        foo_news = Page.objects.get(title_set__title='news', site=foo_site)
+        unmanaged_perm = PagePermission.objects.create(user=bob, page=foo_news)
+        command = manage_page_permissions.Command()
+        command.execute(role='writer')
+        self.assertEqual(len(command.errors), 1)
+        self.assertNotIn(bob, writer_role.users(foo_site))
+        self.assertNotIn(unmanaged_perm, writer_role.derived_page_permissions.all())

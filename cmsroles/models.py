@@ -212,7 +212,8 @@ class Role(AbstractPagePermission):
     def ungrant_from_user(self, user, site):
         """Remove the given user from this role from the given site"""
         # TODO: Extract some 'state' class that implements the 
-        #       is/isn't site wide differences
+        #       is/isn't site wide differences or create two different
+        #       Role classes
         if self.is_site_wide:
             user.groups.remove(self.get_site_specific_group(site))
         else:
