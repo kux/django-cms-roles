@@ -12,7 +12,12 @@ class Command(BaseCommand):
     help = u'Looks for unmanaged page permissions that grant rights ' +\
         'to users that belong to a group that a non site wide role ' +\
         'is based on. Those page permissions are then added to the ' +\
-        'role\'s derived_page_permissions thus making them managed'
+        'role\'s derived_page_permissions thus making them managed\n\n' +\
+        'managed page permissions: page permission objects that exist in ' +\
+        'a role\'s derived_page_permissions list \n' +\
+        'unmanaged page permissions: page permission objects that were ' +\
+        'created by users using the Page Permissions section from the ' +\
+        '\'Change page\' view (i.e. not through user setup) '
 
     option_list = BaseCommand.option_list + (
         make_option('--role', dest='role',
@@ -22,6 +27,8 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         role_name = options['role']
         role = Role.objects.get(name=role_name)
+        if role.is_site_wide:
+            raise ValueError('Role must not be site wide')
         other_roles = Role.objects.exclude(name=role_name)
         group = role.group
         unmamanged_page_perms = PagePermission.objects.filter(
