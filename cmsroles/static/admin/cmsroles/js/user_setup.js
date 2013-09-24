@@ -149,7 +149,7 @@ django.jQuery(document).ready(function(){
             return
         }
 
-        if (is_site_wide){
+        if (user_role_pair.role.val() === "" || is_site_wide){
             remove_page_formset(user_settings);
             $('.assign-pages', user_settings).hide();
         }else{
