@@ -1,0 +1,11 @@
+<div class='page_formset'>
+  <div class='page_management'>
+    {{ page_formset.management_form }}
+  </div>
+  {{ page_formset.non_form_errors }}
+  {% for page_form in page_formset %}
+    <div class='page_form'>
+      {{ page_form.as_p }}
+    </div>
+  {% endfor %}
+</div>

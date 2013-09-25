@@ -2,13 +2,17 @@ from django.test import TestCase
 from django.contrib.auth.models import User, Group, Permission
 from django.contrib.sites.models import Site
 from django.core.exceptions import ValidationError
+from django.utils import simplejson
+from django.core.management import call_command
 
 from cms.models.permissionmodels import GlobalPagePermission, PagePermission
+from cms.models.pagemodel import Page
 from cms.api import create_page
 
 from cmsroles.models import Role
 from cmsroles.siteadmin import (is_site_admin, get_administered_sites, get_site_users,
                                 get_site_admin_required_permission)
+import cmsroles.management.commands.manage_page_permissions as manage_page_permissions
 
 
 class HelpersMixin(object):
@@ -16,6 +20,13 @@ class HelpersMixin(object):
         site_admin_group = Group.objects.create(name='site_admin')
         site_admin_group.permissions.add(get_site_admin_required_permission())
         return site_admin_group
+
+    def _create_pages(self, site):
+        master = create_page('master', 'cms_mock_template.html', language='en', site=site)
+        news_page = create_page('news', 'cms_mock_template.html', language='en', site=site, parent=master)
+        create_page('something happend', 'cms_mock_template.html', language='en', site=site, parent=news_page)
+        create_page('blog', 'cms_mock_template.html', language='en', site=site, parent=master)
+        return  master
 
     def _create_simple_setup(self):
         """Creates two sites, three roles and five users that have
@@ -57,12 +68,13 @@ class HelpersMixin(object):
         vasile = User.objects.create(username='vasile', is_staff=True)
         editor_role.grant_to_user(vasile, bar_site)
         bob = User.objects.create(username='bob', is_staff=True)
-        create_page('master', 'template.html', language='en', site=bar_site)
-        writer_role.grant_to_user(bob, bar_site)
+        master_bar = self._create_pages(bar_site)
+        self._create_pages(foo_site)
+        writer_role.grant_to_user(bob, bar_site, [master_bar])
 
     def _create_site_with_page(self, domain):
         site = Site.objects.create(name='foo.site.com', domain='foo.site.com')
-        create_page('master', 'template.html', language='en', site=site)
+        create_page('master', 'cms_mock_template.html', language='en', site=site)
         return site
 
     def _create_non_site_wide_role(self):
@@ -84,12 +96,14 @@ class SiteAdminTests(TestCase, HelpersMixin):
         self._create_simple_setup()
         joe = User.objects.get(username='joe')
         administered_sites = get_administered_sites(joe)
-        self.assertEquals(set([s.domain for s in administered_sites]),
-                          set(['foo.site.com', 'bar.site.com']))
+        self.assertItemsEqual(
+            [s.domain for s in administered_sites],
+            ['foo.site.com', 'bar.site.com'])
         jack = User.objects.get(username='jack')
         administered_sites = get_administered_sites(jack)
-        self.assertEquals([s.domain for s in administered_sites],
-                          ['bar.site.com'])
+        self.assertItemsEqual(
+            [s.domain for s in administered_sites],
+            ['bar.site.com'])
 
     def test_get_administered_sites_with_user_referencing_glob_page_(self):
         foo_site = Site.objects.create(name='foo.site.com', domain='foo.site.com')
@@ -101,7 +115,9 @@ class SiteAdminTests(TestCase, HelpersMixin):
         gpp.sites.add(foo_site)
         administered_sites = get_administered_sites(admin_user)
         self.assertEquals(len(administered_sites), 1)
-        self.assertEquals([s.pk for s in administered_sites], [foo_site.pk])
+        self.assertItemsEqual(
+            [s.pk for s in administered_sites],
+            [foo_site.pk])
 
     def test_not_accessible_for_non_siteadmins(self):
         joe = User.objects.create_user(
@@ -155,18 +171,24 @@ class ObjectInteractionsTests(TestCase, HelpersMixin):
         writer_role = self._create_non_site_wide_role()
         foo_site = self._create_site_with_page('foo.site.com')
         user = User.objects.create(username='gigi', is_staff=True)
-        writer_role.grant_to_user(user, foo_site)
+        master_page = Page.objects.get(
+            title_set__title='master',
+            site=foo_site)
+        writer_role.grant_to_user(user, foo_site, [master_page])
 
         page_perms = PagePermission.objects.filter(user=user)
         self.assertEqual(len(page_perms), 1)
         users = writer_role.users(foo_site)
         self.assertItemsEqual([u.pk for u in users], [user.pk])
 
-    def test_switch_role_form_site_wide_to_non_wide(self):
+    def test_switch_role_form_non_wide_to_site_wide(self):
         writer_role = self._create_non_site_wide_role()
         foo_site = self._create_site_with_page('foo.site.com')
         user = User.objects.create(username='gigi', is_staff=True)
-        writer_role.grant_to_user(user, foo_site)
+        master_page = Page.objects.get(
+            title_set__title='master',
+            site=foo_site)
+        writer_role.grant_to_user(user, foo_site, [master_page])
 
         writer_role.is_site_wide = True
         writer_role.save()
@@ -175,6 +197,23 @@ class ObjectInteractionsTests(TestCase, HelpersMixin):
         users = writer_role.users(foo_site)
         self.assertItemsEqual([u.pk for u in users], [user.pk])
         self.assertTrue(writer_role.derived_global_permissions.filter(group__user=user).exists())
+
+    def test_switch_role_form_site_wide_to_non_wide(self):
+        base_site_admin_group = self._create_site_admin_group()
+        admin_role = Role.objects.create(
+            name='site admin', group=base_site_admin_group,
+            is_site_wide=True)
+        foo_site = self._create_site_with_page('foo.site.com')
+        user = User.objects.create(username='gigi', is_staff=True)
+        admin_role.grant_to_user(user, foo_site)
+
+        admin_role.is_site_wide = False
+        admin_role.save()
+        self.assertTrue(admin_role.derived_page_permissions.exists())
+        self.assertFalse(admin_role.derived_global_permissions.exists())
+        users = admin_role.users(foo_site)
+        self.assertItemsEqual([u.pk for u in users], [user.pk])
+        self.assertTrue(admin_role.derived_page_permissions.filter(user=user).exists())
 
     def test_cant_create_two_roles_based_on_the_same_group(self):
         site_admin_group = self._create_site_admin_group()
@@ -324,7 +363,10 @@ class ObjectInteractionsTests(TestCase, HelpersMixin):
         writer_role = self._create_non_site_wide_role()
         foo_site = self._create_site_with_page('foo.site.com')
         user = User.objects.create(username='gigi', is_staff=True)
-        writer_role.grant_to_user(user, foo_site)
+        master_page = Page.objects.get(
+            title_set__title='master',
+            site=foo_site)
+        writer_role.grant_to_user(user, foo_site, [master_page])
 
         self.assertEqual(writer_role.derived_page_permissions.count(), 1)
         for page_perm in writer_role.derived_page_permissions.all():
@@ -378,8 +420,10 @@ class ObjectInteractionsTests(TestCase, HelpersMixin):
         bar_site = self._create_site_with_page('bar.site.com')
         writer_role = self._create_non_site_wide_role()
         user = User.objects.create(username='gigi', is_staff=True)
-        writer_role.grant_to_user(user, foo_site)
-        writer_role.grant_to_user(user, bar_site)
+        master_foo = Page.objects.get(title_set__title='master', site=foo_site)
+        master_bar = Page.objects.get(title_set__title='master', site=bar_site)
+        writer_role.grant_to_user(user, foo_site, [master_foo])
+        writer_role.grant_to_user(user, bar_site, [master_bar])
 
         users = writer_role.users(foo_site)
         self.assertItemsEqual([u.pk for u in users], [user.pk])
@@ -395,8 +439,35 @@ class ObjectInteractionsTests(TestCase, HelpersMixin):
         # but is still assigned to bar
         self.assertItemsEqual([u.pk for u in users], [user.pk])
 
+    def test_user_belonging_to_more_sites(self):
+        """This tests proper functioning of the unassignment
+        of a role in the scenario:
 
-class RoleValidationtests(TestCase, HelpersMixin):
+        * user bob has writer_role on both foo_site and bar_site
+        * user bob has a custom built PagePermssion (not managed
+          through the writer_role)
+          """
+        self._create_simple_setup()
+        foo_site = Site.objects.get(domain='foo.site.com')
+        bar_site = Site.objects.get(domain='bar.site.com')
+        writer_role = Role.objects.get(name='writer')
+        bob = User.objects.get(username='bob')
+        foo_master_page = Page.objects.get(
+            title_set__title='master',
+            site=foo_site)
+        writer_role.grant_to_user(bob, foo_site, [foo_master_page])
+        news_page = Page.objects.get(
+            title_set__title='news',
+            parent=foo_master_page)
+        PagePermission.objects.create(user=bob, page=news_page)
+        writer_role.ungrant_from_user(bob, foo_site)
+        writer_users = writer_role.users(foo_site)
+        self.assertNotIn(bob, writer_users)
+        writer_users = writer_role.users(bar_site)
+        self.assertIn(bob, writer_users)
+
+
+class RoleValidationTests(TestCase, HelpersMixin):
 
     def test_role_validation_two_roles_same_group(self):
         Site.objects.create(name='foo.site.com', domain='foo.site.com')
@@ -419,7 +490,7 @@ class RoleValidationtests(TestCase, HelpersMixin):
             role_from_derived_group.clean()
 
 
-class UserSetupFormTests(TestCase, HelpersMixin):
+class ViewsTests(TestCase, HelpersMixin):
 
     def setUp(self):
         User.objects.create_superuser(
@@ -436,7 +507,7 @@ class UserSetupFormTests(TestCase, HelpersMixin):
         editor = Role.objects.get(name='editor')
         return foo_site, joe, admin, george, developer, robin, editor
 
-    def test_user_formset_submit_change_roles(self):
+    def test_change_roles(self):
         self._create_simple_setup()
         # users assigned to foo.site.com:
         # joe: site admin, george: developer, robin: editor
@@ -444,21 +515,18 @@ class UserSetupFormTests(TestCase, HelpersMixin):
         self.client.login(username='root', password='root')
         response = self.client.post('/admin/cmsroles/usersetup/?site=%s' % foo_site.pk, {
                 # management form
-                u'form-MAX_NUM_FORMS': [u''],
-                u'form-TOTAL_FORMS': [u'3'],
-                u'form-INITIAL_FORMS': [u'3'],
+                u'user-roles-MAX_NUM_FORMS': [u''],
+                u'user-roles-TOTAL_FORMS': [u'3'],
+                u'user-roles-INITIAL_FORMS': [u'3'],
                 # change joe to a developer
-                u'form-0-user': [unicode(joe.pk)],
-                u'form-0-role': [unicode(developer.pk)],
-                u'form-0-site': [unicode(foo_site.pk)],
+                u'user-roles-0-user': [unicode(joe.pk)],
+                u'user-roles-0-role': [unicode(developer.pk)],
                 # george to an editor
-                u'form-1-user': [unicode(george.pk)],
-                u'form-1-role': [unicode(editor.pk)],
-                u'form-1-site': [unicode(foo_site.pk)],
+                u'user-roles-1-user': [unicode(george.pk)],
+                u'user-roles-1-role': [unicode(editor.pk)],
                 # robin stays the same
-                u'form-2-user': [unicode(robin.pk)],
-                u'form-2-role': [unicode(editor.pk)],
-                u'form-2-site': [unicode(foo_site.pk)],
+                u'user-roles-2-user': [unicode(robin.pk)],
+                u'user-roles-2-role': [unicode(editor.pk)],
                 u'next': [u'continue']}
                 )
         self.assertEqual(response.status_code, 302)
@@ -469,7 +537,7 @@ class UserSetupFormTests(TestCase, HelpersMixin):
         self.assertEqual(user_pks_to_role_pks[george.pk], editor.pk)
         self.assertEqual(user_pks_to_role_pks[robin.pk], editor.pk)
 
-    def test_user_formset_submit_unassign_user(self):
+    def test_unassign_user(self):
         self._create_simple_setup()
         # users assigned to foo.site.com:
         # joe: site admin, george: developer, robin: editor
@@ -477,17 +545,15 @@ class UserSetupFormTests(TestCase, HelpersMixin):
         self.client.login(username='root', password='root')
         response = self.client.post('/admin/cmsroles/usersetup/?site=%s' % foo_site.pk, {
                 # management form
-                u'form-MAX_NUM_FORMS': [u''],
-                u'form-TOTAL_FORMS': [u'2'],
-                u'form-INITIAL_FORMS': [u'2'],
+                u'user-roles-MAX_NUM_FORMS': [u''],
+                u'user-roles-TOTAL_FORMS': [u'2'],
+                u'user-roles-INITIAL_FORMS': [u'2'],
                 # joe remains an admin
-                u'form-0-user': [unicode(joe.pk)],
-                u'form-0-role': [unicode(admin.pk)],
-                u'form-0-site': [unicode(foo_site.pk)],
+                u'user-roles-0-user': [unicode(joe.pk)],
+                u'user-roles-0-role': [unicode(admin.pk)],
                 # george remains a developer
-                u'form-1-user': [unicode(george.pk)],
-                u'form-1-role': [unicode(developer.pk)],
-                u'form-1-site': [unicode(foo_site.pk)],
+                u'user-roles-1-user': [unicode(george.pk)],
+                u'user-roles-1-role': [unicode(developer.pk)],
                 # but robin gets removed !!
                 u'next': [u'continue']}
                 )
@@ -498,7 +564,91 @@ class UserSetupFormTests(TestCase, HelpersMixin):
         self.assertEqual(user_pks_to_role_pks[joe.pk], admin.pk)
         self.assertEqual(user_pks_to_role_pks[george.pk], developer.pk)
 
-    def test_user_formset_submit_assign_new_user(self):
+    def test_change_user_pages(self):
+        self._create_simple_setup()
+        # users assigned to foo.site.com:
+        # joe: site admin, george: developer, robin: editor
+        foo_site, joe, _, george, developer, robin, editor = self._get_foo_site_objs()
+        master_page = self._create_pages(foo_site)
+        news_page = Page.objects.get(title_set__title='news', parent=master_page)
+        writer = Role.objects.get(name='writer')
+        self.client.login(username='root', password='root')
+        response = self.client.post('/admin/cmsroles/usersetup/?site=%s' % foo_site.pk, {
+                # management form
+                u'user-roles-MAX_NUM_FORMS': [u''],
+                u'user-roles-TOTAL_FORMS': [u'1'],
+                u'user-roles-INITIAL_FORMS': [u'1'],
+                # make jow a writer
+                u'user-roles-0-user': [unicode(joe.pk)],
+                u'user-roles-0-role': [unicode(writer.pk)],
+                (u'user-%d-MAX_NUM_FORMS' % joe.pk): u'',
+                (u'user-%d-TOTAL_FORMS' % joe.pk): u'1',
+                (u'user-%d-INITIAL_FORMS' % joe.pk): u'1',
+                # and give him access to the news page
+                (u'user-%d-0-page' % joe.pk): u'%d' % news_page.pk,
+                u'next': [u'continue']}
+                )
+        self.assertEqual(response.status_code, 302)
+        users_to_roles = get_site_users(foo_site)
+        user_pks_to_role_pks = dict((u.pk, r.pk) for u, r in users_to_roles.iteritems())
+        self.assertEqual(len(user_pks_to_role_pks), 1)
+        self.assertEqual(user_pks_to_role_pks[joe.pk], writer.pk)
+        page_perms = writer.get_user_page_perms(joe, foo_site)
+        self.assertEqual(len(page_perms), 1)
+        perm_to_news = page_perms[0]
+        self.assertEqual(perm_to_news.page, news_page)
+
+    def test_change_user_pages_no_pages_in_formset(self):
+        self._create_simple_setup()
+        # users assigned to foo.site.com:
+        # joe: site admin, george: developer, robin: editor
+        foo_site, joe, _, george, developer, robin, editor = self._get_foo_site_objs()
+        master_page = self._create_pages(foo_site)
+        news_page = Page.objects.get(title_set__title='news', parent=master_page)
+        writer = Role.objects.get(name='writer')
+        self.client.login(username='root', password='root')
+        response = self.client.post('/admin/cmsroles/usersetup/?site=%s' % foo_site.pk, {
+                # management form
+                u'user-roles-MAX_NUM_FORMS': [u''],
+                u'user-roles-TOTAL_FORMS': [u'1'],
+                u'user-roles-INITIAL_FORMS': [u'1'],
+                # make jow a writer
+                u'user-roles-0-user': [unicode(joe.pk)],
+                u'user-roles-0-role': [unicode(writer.pk)],
+                (u'user-%d-MAX_NUM_FORMS' % joe.pk): u'',
+                (u'user-%d-TOTAL_FORMS' % joe.pk): u'0',
+                (u'user-%d-INITIAL_FORMS' % joe.pk): u'0',
+                # we don't give him any page
+                u'next': [u'continue']}
+                )
+        # we don't get a redirect => POST submition failed
+        # we do get 200, but that's a page containing the form errors
+        self.assertEqual(response.status_code, 200)
+        formset_with_errors = response.context['page_formsets'][unicode(joe.pk)]
+        self.assertEqual(len(formset_with_errors.non_form_errors()), 1)
+        self.assertEqual(formset_with_errors.non_form_errors()[0],
+                         u'At least a page needs to be selected')
+
+    def test_change_user_pages_no_formset_given(self):
+        self._create_simple_setup()
+        # users assigned to foo.site.com:
+        # joe: site admin, george: developer, robin: editor
+        foo_site, joe, _, george, developer, robin, editor = self._get_foo_site_objs()
+        writer = Role.objects.get(name='writer')
+        self.client.login(username='root', password='root')
+        with self.assertRaises(ValidationError):
+            self.client.post('/admin/cmsroles/usersetup/?site=%s' % foo_site.pk, {
+                    # management form
+                    u'user-roles-MAX_NUM_FORMS': [u''],
+                    u'user-roles-TOTAL_FORMS': [u'1'],
+                    u'user-roles-INITIAL_FORMS': [u'1'],
+                    #  developer
+                    u'user-roles-0-user': [unicode(joe.pk)],
+                    u'user-roles-0-role': [unicode(writer.pk)],
+                    u'next': [u'continue']}
+                    )
+
+    def test_assign_new_user(self):
         self._create_simple_setup()
         # users assigned to foo.site.com:
         # joe: site admin, george: developer, robin: editor
@@ -507,25 +657,21 @@ class UserSetupFormTests(TestCase, HelpersMixin):
         self.client.login(username='root', password='root')
         response = self.client.post('/admin/cmsroles/usersetup/?site=%s' % foo_site.pk, {
                 # management form
-                u'form-MAX_NUM_FORMS': [u''],
-                u'form-TOTAL_FORMS': [u'4'],
-                u'form-INITIAL_FORMS': [u'4'],
+                u'user-roles-MAX_NUM_FORMS': [u''],
+                u'user-roles-TOTAL_FORMS': [u'4'],
+                u'user-roles-INITIAL_FORMS': [u'4'],
                 # joe remains an admin
-                u'form-0-user': [unicode(joe.pk)],
-                u'form-0-role': [unicode(admin.pk)],
-                u'form-0-site': [unicode(foo_site.pk)],
+                u'user-roles-0-user': [unicode(joe.pk)],
+                u'user-roles-0-role': [unicode(admin.pk)],
                 # george remains a developer
-                u'form-1-user': [unicode(george.pk)],
-                u'form-1-role': [unicode(developer.pk)],
-                u'form-1-site': [unicode(foo_site.pk)],
+                u'user-roles-1-user': [unicode(george.pk)],
+                u'user-roles-1-role': [unicode(developer.pk)],
                 # robin remains an editor
-                u'form-2-user': [unicode(robin.pk)],
-                u'form-2-role': [unicode(editor.pk)],
-                u'form-2-site': [unicode(foo_site.pk)],
+                u'user-roles-2-user': [unicode(robin.pk)],
+                u'user-roles-2-role': [unicode(editor.pk)],
                 # but we also add criss to foo_site
-                u'form-3-user': [unicode(criss.pk)],
-                u'form-3-role': [unicode(admin.pk)],
-                u'form-3-site': [unicode(foo_site.pk)],
+                u'user-roles-3-user': [unicode(criss.pk)],
+                u'user-roles-3-role': [unicode(admin.pk)],
                 u'next': [u'continue']}
                 )
         self.assertEqual(response.status_code, 302)
@@ -537,6 +683,26 @@ class UserSetupFormTests(TestCase, HelpersMixin):
         self.assertEqual(user_pks_to_role_pks[robin.pk], editor.pk)
         self.assertEqual(user_pks_to_role_pks[criss.pk], admin.pk)
 
+    def test_get_page_formset(self):
+        self._create_simple_setup()
+        bar_site = Site.objects.get(domain='bar.site.com')
+        bob = User.objects.get(username='bob')
+        writer = Role.objects.get(name='writer')
+        self.client.login(username='root', password='root')
+        response = self.client.get(
+            '/admin/cmsroles/get_page_formset/?site=%s' % bar_site.pk, {
+                u'user': bob.pk,
+                u'role': writer.pk,
+                u'site': bar_site.pk}
+            )
+        content = simplejson.loads(response.content)
+        page_formset = content[u'page_formset']
+        # this assert is a bit ugly, but since the formset is already
+        # rendered, I don't see any other way to verify that
+        # the master page (wich bob has access to)
+        # is in the returned formset
+        self.assertTrue('selected="selected"> master' in page_formset)
+        
     def test_no_duplicate_groups_in_the_group_admin(self):
         site_admin_group = self._create_site_admin_group()
         Role.objects.create(
@@ -552,3 +718,42 @@ class UserSetupFormTests(TestCase, HelpersMixin):
         # before 'distinct()' was added, ExtendedGroupAdmin.get_filtered_queryset
         # used to return the same group object multiple times
         self.assertListEqual(list(displayed_objects), [site_admin_group])
+
+
+class ManagePagePermissionsCommandTests(TestCase, HelpersMixin):
+
+    def test_site_already_writer_on(self):
+        self._create_simple_setup()
+        bar_site = Site.objects.get(domain='bar.site.com')
+        writer_role = Role.objects.get(name='writer')
+        bob = User.objects.get(username='bob')
+        bar_news = Page.objects.get(title_set__title='news', site=bar_site)
+        unmanaged_perm = PagePermission.objects.create(user=bob, page=bar_news)
+        call_command('manage_page_permissions', role='writer')
+        self.assertIn(unmanaged_perm, writer_role.derived_page_permissions.all())
+
+    def test_site_not_writer_on(self):
+        self._create_simple_setup()
+        foo_site = Site.objects.get(domain='foo.site.com')
+        writer_role = Role.objects.get(name='writer')
+        bob = User.objects.get(username='bob')
+        foo_news = Page.objects.get(title_set__title='news', site=foo_site)
+        unmanaged_perm = PagePermission.objects.create(user=bob, page=foo_news)
+        call_command('manage_page_permissions', role='writer')
+        self.assertIn(unmanaged_perm, writer_role.derived_page_permissions.all())
+        self.assertIn(bob, writer_role.users(foo_site))
+
+    def test_on_site_already_having_other_role(self):
+        self._create_simple_setup()
+        foo_site = Site.objects.get(domain='foo.site.com')
+        bob = User.objects.get(username='bob')
+        writer_role = Role.objects.get(name='writer')
+        admin_role = Role.objects.get(name='site admin')
+        admin_role.grant_to_user(bob, foo_site)
+        foo_news = Page.objects.get(title_set__title='news', site=foo_site)
+        unmanaged_perm = PagePermission.objects.create(user=bob, page=foo_news)
+        command = manage_page_permissions.Command()
+        command.execute(role='writer')
+        self.assertEqual(len(command.errors), 1)
+        self.assertNotIn(bob, writer_role.users(foo_site))
+        self.assertNotIn(unmanaged_perm, writer_role.derived_page_permissions.all())

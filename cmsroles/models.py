@@ -8,8 +8,11 @@ from django.utils.translation import ugettext_lazy as _
 
 from cms.models.permissionmodels import (
     AbstractPagePermission, GlobalPagePermission, PagePermission)
+from cms.models import ACCESS_PAGE_AND_DESCENDANTS
 from cms.models.pagemodel import Page
-from parse import parse
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 def get_permission_fields():
@@ -36,8 +39,9 @@ class Role(AbstractPagePermission):
     When is_site_wide is True the role will maintain derived_global_permissions
     When is_site_wide is False this role will maintain derived_page_permissions
 
-    A class invariant is that one of derived_global_permissions and
-    derived_page_permissions must be empty at all times
+    Invariants:
+    * one of derived_page_permissions or derived_global_permissions
+      must always be empty
     """
 
     class Meta:
@@ -132,15 +136,24 @@ class Role(AbstractPagePermission):
                     page_perm.delete()
             else:
                 for global_page_perm in self.derived_global_permissions.all():
-                    # there should be exactly one site, uness someone
-                    # manually fiddled with it
-                    try:
-                        site = global_page_perm.sites.all()[0]
-                    except IndexError:
+                    sites = global_page_perm.sites.all()
+                    if len(sites) != 1:
+                        logger.error(u'Auto generated global page permission was fiddled')
                         continue
+                    site = sites[0]
+                    users = global_page_perm.group.user_set.all()
+                    try:
+                        first_page = Page.objects.filter(site=site)\
+                            .order_by('tree_id', 'lft')[0]
+                    except IndexError:
+                        if len(users) > 0:
+                            users_str = ', '.join(list(users))
+                            logger.error(u'Users %s lost role %s on site %s after '
+                                           'making the site non site wide' % (
+                                    users_str, self.name, site.domain))
                     else:
-                        for user in global_page_perm.group.user_set.all():
-                            self.grant_to_user(user, site)
+                        for user in users:
+                            self.grant_to_user(user, site, [first_page])
                     global_page_perm.group.delete()
 
     def delete(self, *args, **kwargs):
@@ -172,39 +185,35 @@ class Role(AbstractPagePermission):
         gp.sites.add(site)
         self.derived_global_permissions.add(gp)
 
-    def grant_to_user(self, user, site):
+    def grant_to_user(self, user, site, pages=None):
         """Grant the given user this role for given site"""
         if self.is_site_wide:
             user.groups.add(self.get_site_specific_group(site))
         else:
-            try:
-                # this is a workaround for the fact that
-                # the interface doesn't yet support the selection of
-                # pages when working in a 'page by page' mode
-                # as a workaround, a page permission is granted on
-                # the site's first page
-                first_page = Page.objects.filter(site=site)\
-                    .order_by('tree_id', 'lft')[0]
-            except IndexError:
-                raise ValidationError(
-                    'Site needs to have at least one page '
-                    'before you can grant this role to an user')
-            else:
-                page_permission = PagePermission(page=first_page, user=user)
-                for key, value in self._get_permissions_dict().iteritems():
+            if pages is None or len(pages) == 0:
+                raise ValidationError('At lest a page must be given')
+            # delete the existing page perms
+            self.get_user_page_perms(user, site).delete()
+            # and assign the new ones
+            for page in pages:
+                page_permission = PagePermission(
+                    page=page, user=user,
+                    grant_on=ACCESS_PAGE_AND_DESCENDANTS)
+                for key, value in self._get_permissions_dict()\
+                        .iteritems():
                     setattr(page_permission, key, value)
                 page_permission.save()
                 self.derived_page_permissions.add(page_permission)
-                user.groups.add(self.group)
-
+            user.groups.add(self.group)
         if not user.is_staff:
             user.is_staff = True
             user.save()
 
     def ungrant_from_user(self, user, site):
         """Remove the given user from this role from the given site"""
-        # TODO: Extract some 'state' class that implements the is/isn't site wide
-        #       differences
+        # TODO: Extract some 'state' class that implements the 
+        #       is/isn't site wide differences or create two different
+        #       Role classes
         if self.is_site_wide:
             user.groups.remove(self.get_site_specific_group(site))
         else:
@@ -225,11 +234,14 @@ class Role(AbstractPagePermission):
         """Returnes all users having this role in the given site."""
         if self.is_site_wide:
             global_page_perm = self.derived_global_permissions.filter(sites=site)
-            qs = User.objects.filter(groups__globalpagepermission=global_page_perm)
+            users = list(
+                User.objects.filter(groups__globalpagepermission=global_page_perm))
         else:
-            qs = User.objects.filter(
-                pagepermission__page__site=site, groups=self.group)
-        return qs.distinct()
+            page_perms = self.derived_page_permissions.filter(
+                page__site=site).select_related('user')
+            users = set(perm.user for perm in page_perms if perm.user is not None)
+            users = list(users)
+        return users
 
     def get_site_specific_group(self, site):
         # TODO: enforce there is one global page perm per site
@@ -237,6 +249,14 @@ class Role(AbstractPagePermission):
         #       a single site, but there's nothing stopping super-users
         #       from messing around with them
         return self.derived_global_permissions.get(sites=site).group
+
+    def get_user_page_perms(self, user, site):
+        """For a non site wide role, returns the pages that the given
+        user has access to on the given site."""
+        if self.is_site_wide:
+            raise ValueError(
+                'This makes sense only for non site wide roles')
+        return self.derived_page_permissions.filter(page__site=site, user=user)
 
 
 @receiver(signals.pre_delete, sender=Group)
@@ -317,6 +337,10 @@ def delete_role_groups(instance, **kwargs):
 
 @receiver(signals.m2m_changed, sender=Group.permissions.through)
 def update_site_specific_groups(instance, **kwargs):
+    """This signal handler updates all auto generated groups
+    that are being managed by a role when the base group on which
+    the role is built gets updated
+    """
     action = kwargs['action']
     if not action.startswith('post_'):
         return

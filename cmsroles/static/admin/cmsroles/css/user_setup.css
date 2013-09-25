@@ -16,8 +16,13 @@
 
 .user_settings {
     padding-top: 3px;
+    padding-bottom: 5px;
     border-bottom: 1px solid #ccc;
     position: relative;
+}
+
+.user_settings p{
+    display: inline-block;
 }
 
 #content select{
@@ -59,6 +64,13 @@
     display: block;
 }
 
+.assign-pages{
+    background: url(../img/icon_addlink.gif) 0 .2em no-repeat;
+    padding-left: 14px;
+    margin-left: 5px;
+    display: inline-block;
+}
+
 .delete-row{
     text-indent: -9999px;
     width: 15px;
@@ -69,4 +81,26 @@
     position: absolute;
     right: 5px;
     top: 5px;
+}
+
+.page_form{
+    position: relative;
+}
+
+.page_formset{
+    background-color: #E9E9E9;
+    padding-top: 5px;
+    padding-bottom: 5px;
+}
+
+.waiting-pages{
+    display: inline-block;
+    position: absolute;
+    padding-left: 10px;
+    visibility: hidden;
+}
+
+.waiting-change{
+    display: inline-block;
+    visibility: hidden;
 }
